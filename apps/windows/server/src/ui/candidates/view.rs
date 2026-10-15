@@ -2,8 +2,7 @@
 //! 横排 `序号 候选词` 左右排、高亮项的译文另起一行；顶部一行拼音，右侧整句补全。
 
 use qingjian_platform::LayoutMode;
-use qingjian_platform::protocol::PreeditKind;
-use qingjian_render::{Row, Tone};
+use qingjian_render::{PreeditStyle, Row, Tone};
 use windows::Win32::Foundation::{COLORREF, RECT, SIZE};
 use windows::Win32::Graphics::Gdi::{
     CreateRoundRectRgn, CreateSolidBrush, DeleteObject, FillRect, FillRgn, GetTextExtentPoint32W,
@@ -123,18 +122,26 @@ fn draw_top_line(hdc: HDC, data: &RenderData, y: i32) -> i32 {
         return 0;
     }
     let theme = &data.theme;
-    let height = line_height(hdc, theme.annotation_font);
+    let height = preedit_line_height(hdc, data);
     let top = y + theme.row_padding;
+    let small = preedit_small_offset(hdc, theme, height);
     let mut x = theme.padding;
-    for (text, kind) in &data.preedit {
-        let (color, strike, underline) = match kind {
-            PreeditKind::Typed => (theme.gloss_color, false, false),
-            PreeditKind::Rest => (theme.pos_color, false, false),
-            PreeditKind::Corrected => (theme.pos_color, true, false),
+    for (text, style) in &data.preedit {
+        let (color, strike, underline) = match style {
+            PreeditStyle::Typed => (theme.gloss_color, false, false),
+            PreeditStyle::Rest => (theme.pos_color, false, false),
+            PreeditStyle::Struck => (theme.pos_color, true, false),
             // 辅码码段：与剩余拼音同一个淡色，再压一道下划线把它们区分开
-            PreeditKind::AuxCode => (theme.pos_color, false, true),
+            PreeditStyle::AuxCode => (theme.pos_color, false, true),
+            PreeditStyle::Staging => (theme.text_color, false, false),
         };
-        let width = draw_text(hdc, theme.annotation_font, color, x, top, text);
+        let font = preedit_font(theme, *style);
+        let text_top = if *style == PreeditStyle::Staging {
+            top
+        } else {
+            top + small
+        };
+        let width = draw_text(hdc, font, color, x, text_top, text);
         let weight = scale_line(theme);
         if strike {
             let line = RECT {
@@ -157,8 +164,7 @@ fn draw_top_line(hdc: HDC, data: &RenderData, y: i32) -> i32 {
         x += width;
     }
     if !data.preedit.is_empty() {
-        let before = concat_before_cursor(&data.preedit, data.cursor);
-        let caret_x = theme.padding + measure(hdc, theme.annotation_font, &before).cx;
+        let caret_x = theme.padding + prefix_width(hdc, theme, &data.preedit, data.cursor);
         let caret = RECT {
             left: caret_x,
             top,
@@ -175,7 +181,7 @@ fn draw_top_line(hdc: HDC, data: &RenderData, y: i32) -> i32 {
             theme.annotation_font,
             theme.cloud_color,
             sentence_x,
-            top,
+            top + small,
             CLOUD_GLYPH,
         );
         draw_text(
@@ -183,7 +189,7 @@ fn draw_top_line(hdc: HDC, data: &RenderData, y: i32) -> i32 {
             theme.annotation_font,
             theme.gloss_color,
             sentence_x + cloud,
-            top,
+            top + small,
             sentence,
         );
     }
@@ -356,13 +362,12 @@ fn top_line_size(hdc: HDC, data: &RenderData) -> (i32, i32) {
         return (0, 0);
     }
     let theme = &data.theme;
-    let height = line_height(hdc, theme.annotation_font);
+    let height = preedit_line_height(hdc, data);
     // 没有拼音行时那段宽度为 0，但整句补全前面的间隔照旧。
     let mut width = if data.preedit.is_empty() {
         0
     } else {
-        let full: String = data.preedit.iter().map(|(t, _)| t.as_str()).collect();
-        measure(hdc, theme.annotation_font, &full).cx + scale_line(theme)
+        prefix_width(hdc, theme, &data.preedit, usize::MAX) + scale_line(theme)
     };
     if let Some(sentence) = &data.sentence {
         width += theme.column_gap
@@ -462,13 +467,51 @@ fn tone_color(theme: &Theme, tone: Tone) -> COLORREF {
     }
 }
 
-/// 拼音行光标前 `cursor` 个字符。
-fn concat_before_cursor(preedit: &[(String, PreeditKind)], cursor: usize) -> String {
-    preedit
+/// 暂存的词用候选词的字体，其余段用译词字体。
+fn preedit_font(theme: &Theme, style: PreeditStyle) -> HFONT {
+    if style == PreeditStyle::Staging {
+        theme.text_font
+    } else {
+        theme.annotation_font
+    }
+}
+
+/// 行里有暂存的词时按候选词的行高，否则按译词。
+fn preedit_line_height(hdc: HDC, data: &RenderData) -> i32 {
+    let font = if data
+        .preedit
         .iter()
-        .flat_map(|(text, _)| text.chars())
-        .take(cursor)
-        .collect()
+        .any(|(_, style)| *style == PreeditStyle::Staging)
+    {
+        data.theme.text_font
+    } else {
+        data.theme.annotation_font
+    };
+    line_height(hdc, font)
+}
+
+/// 拼音或译文相对暂存词往下挪多少才纵向居中。没有暂存词时为 0。
+fn preedit_small_offset(hdc: HDC, theme: &Theme, line: i32) -> i32 {
+    ((line - line_height(hdc, theme.annotation_font)) / 2).max(0)
+}
+
+/// 拼音行前 `cursor` 个字符的宽度。各段按自己的字体量。
+fn prefix_width(hdc: HDC, theme: &Theme, preedit: &[(String, PreeditStyle)], cursor: usize) -> i32 {
+    let mut left = cursor;
+    let mut width = 0;
+    for (text, style) in preedit {
+        let font = preedit_font(theme, *style);
+        let count = text.chars().count();
+        if left >= count {
+            width += measure(hdc, font, text).cx;
+            left -= count;
+        } else {
+            let partial: String = text.chars().take(left).collect();
+            width += measure(hdc, font, &partial).cx;
+            break;
+        }
+    }
+    width
 }
 
 /// 画一段文字，`(x, y)` 是左上角，返回宽度。调用方先 `SetBkMode(TRANSPARENT)`。

@@ -1,6 +1,6 @@
 //! 叶子节点：文字、图标、拼音行、译文。绑定取不到数据时不产出节点。
 
-use taffy::{Dimension, NodeId, Style};
+use taffy::{AlignItems, Dimension, NodeId, Style};
 
 use super::layout_style;
 use super::{Builder, Context};
@@ -138,6 +138,8 @@ impl Builder<'_> {
             typed,
             rest,
             struck,
+            staging,
+            staging_font,
             caret,
             stroke,
         } = &spec.kind
@@ -148,21 +150,48 @@ impl Builder<'_> {
         let typed_style = self
             .text_style(font, self.color(typed, ctx))
             .stroked(stroke);
+        let rest_style = self.text_style(font, self.color(rest, ctx)).stroked(stroke);
+        let staging_style = self
+            .text_style(
+                staging_font.as_ref().unwrap_or(font),
+                self.color(staging.as_ref().unwrap_or(typed), ctx),
+            )
+            .stroked(stroke);
         let mut children = Vec::with_capacity(preedit.segments.len() + 2);
+        let mut caret_x = 0.0;
+        let mut caret_height = typed_style.line_height;
+        let mut remaining = preedit.cursor;
+        let mut seen = 0usize;
         for segment in &preedit.segments {
             let text_style = match segment.style {
                 PreeditStyle::Typed => typed_style,
-                PreeditStyle::Rest => self.text_style(font, self.color(rest, ctx)).stroked(stroke),
+                PreeditStyle::Rest => rest_style,
                 // 辅码码段：与剩余拼音同色，再压一道下划线区分
-                PreeditStyle::AuxCode => self
-                    .text_style(font, self.color(rest, ctx))
-                    .stroked(stroke)
-                    .underlined(),
+                PreeditStyle::AuxCode => rest_style.underlined(),
                 PreeditStyle::Struck => self
                     .text_style(font, self.color(struck, ctx))
                     .stroked(stroke)
                     .struck(),
+                PreeditStyle::Staging => staging_style,
             };
+            let chars = segment.text.chars().count();
+            // 光标落在这段里（含段尾）时用这段的行高；正好在两段之间时留前一段。
+            let at_line_start = preedit.cursor == 0 && seen == 0;
+            let inside = preedit.cursor > seen && preedit.cursor <= seen + chars;
+            if at_line_start || inside {
+                caret_height = text_style.line_height;
+            }
+            if remaining > 0 {
+                if remaining >= chars {
+                    caret_x += self.text.measure(&segment.text, &text_style).width;
+                    remaining -= chars;
+                } else {
+                    let partial: String = segment.text.chars().take(remaining).collect();
+                    caret_x += self.text.measure(&partial, &text_style).width;
+                    remaining = 0;
+                }
+            }
+            seen += chars;
             let visual = Visual::Text {
                 text: segment.text.clone(),
                 style: text_style,
@@ -178,10 +207,9 @@ impl Builder<'_> {
             ..Style::default()
         };
         children.push(self.scene.node(spacer, Visual::Group, &[])?);
-        let caret_x = self
-            .text
-            .measure(&preedit.before_cursor(), &typed_style)
-            .width;
+        let mut row = layout_style::flex(style, Direction::Row);
+        // 暂存的词比旁边的译文大，译文在行里垂直居中。
+        row.align_items = Some(AlignItems::CENTER);
         let caret_style = Style {
             position: taffy::Position::Absolute,
             inset: taffy::Rect {
@@ -192,17 +220,13 @@ impl Builder<'_> {
             },
             size: taffy::Size {
                 width: Dimension::length(caret_width),
-                height: Dimension::length(typed_style.line_height),
+                height: Dimension::length(caret_height),
             },
             ..Style::default()
         };
         let visual = Visual::solid(self.color(&caret.color, ctx), 0.0);
         children.push(self.scene.node(caret_style, visual, &[])?);
-        self.scene.node(
-            layout_style::flex(style, Direction::Row),
-            Visual::Group,
-            &children,
-        )
+        self.scene.node(row, Visual::Group, &children)
     }
 }
 

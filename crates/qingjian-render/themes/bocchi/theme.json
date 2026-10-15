@@ -69,6 +69,7 @@
 
     "bocchi-preedit": {
       "type": "preedit", "font": "preedit", "typed": "@ink", "rest": "#8c6d7a", "struck": "@faint",
+      "staging": "@text", "staging_font": "candidate",
       "caret": { "width": 2, "color": "@accent" }
     },
 

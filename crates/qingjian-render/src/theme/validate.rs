@@ -73,12 +73,20 @@ impl Checker<'_> {
                 typed,
                 rest,
                 struck,
+                staging,
+                staging_font,
                 caret,
                 stroke,
             } => {
                 self.font(font, path);
+                if let Some(font) = staging_font {
+                    self.font(font, path);
+                }
                 self.stroke(stroke.as_ref(), path);
                 for color in [typed, rest, struck, &caret.color] {
+                    self.spec(color, path);
+                }
+                if let Some(color) = staging {
                     self.spec(color, path);
                 }
             }

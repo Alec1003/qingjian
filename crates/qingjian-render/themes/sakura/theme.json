@@ -41,7 +41,9 @@
       "type": "frame", "padding": [2, 0, 6, 0], "align_self": "stretch",
       "children": [
         { "type": "preedit", "when": "preedit", "font": "preedit",
-          "typed": "@ink", "rest": "#9c84a6", "struck": "@faint", "caret": { "width": 1.5, "color": "@ink" } },
+          "typed": "@ink", "rest": "#9c84a6", "struck": "@faint",
+          "staging": "@text", "staging_font": "candidate",
+          "caret": { "width": 1.5, "color": "@ink" } },
         { "type": "frame", "when": "preedit", "width": 1, "height": 16, "fill": "@line", "margin": [3, 10, 0, 10] },
         { "type": "use", "component": "sakura-mode", "margin": [4, 0, 0, 0] },
         { "type": "frame", "when": "trailing", "margin": [4, 0, 0, 16], "children": [
@@ -226,7 +228,9 @@
       "children": [
         { "type": "frame", "padding": [2, 0, 4, 0], "align_self": "stretch", "children": [
           { "type": "preedit", "when": "preedit", "font": "preedit",
-            "typed": "@ink", "rest": "#9c84a6", "struck": "@faint", "caret": { "width": 1.5, "color": "@ink" } },
+            "typed": "@ink", "rest": "#9c84a6", "struck": "@faint",
+            "staging": "@text", "staging_font": "candidate",
+            "caret": { "width": 1.5, "color": "@ink" } },
           { "type": "use", "component": "sakura-mode", "margin": [4, 0, 0, "auto"] }
         ] },
         { "type": "frame", "when": "trailing", "padding": [0, 0, 6, 0], "children": [

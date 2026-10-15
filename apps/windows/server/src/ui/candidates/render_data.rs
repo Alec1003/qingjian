@@ -14,8 +14,8 @@ pub(crate) struct RenderData {
     /// 配色与字体（随 DPI / 深浅重建）。
     pub(super) theme: Rc<Theme>,
 
-    /// 顶部拼音行的各段。
-    pub(super) preedit: Vec<(String, PreeditKind)>,
+    /// 顶部拼音行的各段。暂存的词用 [`PreeditStyle::Staging`]。
+    pub(super) preedit: Vec<(String, PreeditStyle)>,
 
     /// 光标在拼音行里的字符位置。
     pub(super) cursor: usize,
@@ -100,14 +100,9 @@ impl RenderData {
             segments: self
                 .preedit
                 .iter()
-                .map(|(text, kind)| PreeditSegment {
+                .map(|(text, style)| PreeditSegment {
                     text: text.clone(),
-                    style: match kind {
-                        PreeditKind::Typed => PreeditStyle::Typed,
-                        PreeditKind::Rest => PreeditStyle::Rest,
-                        PreeditKind::Corrected => PreeditStyle::Struck,
-                        PreeditKind::AuxCode => PreeditStyle::AuxCode,
-                    },
+                    style: *style,
                 })
                 .collect(),
             cursor: self.cursor,
@@ -136,7 +131,11 @@ fn with_staging(
     words: &[String],
     cursor: usize,
     translation: Option<&str>,
-) -> (Vec<(String, PreeditKind)>, usize) {
+) -> (Vec<(String, PreeditStyle)>, usize) {
+    let pinyin: Vec<_> = pinyin
+        .into_iter()
+        .map(|(text, kind)| (text, preedit_style(kind)))
+        .collect();
     if words.is_empty() {
         return (pinyin, pinyin_cursor);
     }
@@ -147,41 +146,51 @@ fn with_staging(
         if index == cursor {
             caret = seen;
             if !pinyin.is_empty() {
-                segments.push(("▏".to_owned(), PreeditKind::Typed));
+                segments.push(("▏".to_owned(), PreeditStyle::Staging));
                 seen += 1;
             }
         }
-        segments.push((word.clone(), PreeditKind::Typed));
+        segments.push((word.clone(), PreeditStyle::Staging));
         seen += word.chars().count();
     }
     if cursor >= words.len() {
         caret = seen;
         if !pinyin.is_empty() {
-            segments.push(("▏".to_owned(), PreeditKind::Typed));
+            segments.push(("▏".to_owned(), PreeditStyle::Staging));
             seen += 1;
         }
     }
     if pinyin.is_empty() {
         return with_translation(segments, caret, translation);
     }
-    segments.push((" ".to_owned(), PreeditKind::Rest));
+    segments.push((" ".to_owned(), PreeditStyle::Rest));
     seen += 1;
     segments.extend(pinyin);
     with_translation(segments, seen + pinyin_cursor, translation)
 }
 
+/// 协议里的拼音段换成渲染器的样式。暂存的词不走这里。
+fn preedit_style(kind: PreeditKind) -> PreeditStyle {
+    match kind {
+        PreeditKind::Typed => PreeditStyle::Typed,
+        PreeditKind::Rest => PreeditStyle::Rest,
+        PreeditKind::Corrected => PreeditStyle::Struck,
+        PreeditKind::AuxCode => PreeditStyle::AuxCode,
+    }
+}
+
 /// 译文接在整行最后，不占光标。暂存区还空着时不画。
 fn with_translation(
-    mut segments: Vec<(String, PreeditKind)>,
+    mut segments: Vec<(String, PreeditStyle)>,
     caret: usize,
     translation: Option<&str>,
-) -> (Vec<(String, PreeditKind)>, usize) {
+) -> (Vec<(String, PreeditStyle)>, usize) {
     if segments.is_empty() {
         return (segments, caret);
     }
     if let Some(text) = translation.map(str::trim).filter(|text| !text.is_empty()) {
-        segments.push((" ".to_owned(), PreeditKind::Rest));
-        segments.push((text.to_owned(), PreeditKind::Rest));
+        segments.push((" ".to_owned(), PreeditStyle::Rest));
+        segments.push((text.to_owned(), PreeditStyle::Rest));
     }
     (segments, caret)
 }
@@ -201,6 +210,7 @@ fn window_preedit(frame: &Frame) -> Vec<(String, PreeditKind)> {
 mod tests {
     use qingjian_platform::PreeditMode;
     use qingjian_platform::protocol::{Frame, PreeditKind, PreeditSegment};
+    use qingjian_render::PreeditStyle;
 
     use super::window_preedit;
 
@@ -213,6 +223,33 @@ mod tests {
             preedit_mode: mode,
             ..Frame::default()
         }
+    }
+
+    /// 暂存的词用候选词样式，译文和还在敲的拼音各留原来的样式。
+    #[test]
+    fn staged_words_use_the_candidate_style() {
+        let (segments, _) = super::with_staging(
+            vec![("ni".to_owned(), PreeditKind::Typed)],
+            2,
+            &["你".to_owned()],
+            1,
+            Some("you"),
+        );
+        assert!(
+            segments
+                .iter()
+                .any(|(text, style)| text == "你" && *style == PreeditStyle::Staging)
+        );
+        assert!(
+            segments
+                .iter()
+                .any(|(text, style)| text == "ni" && *style == PreeditStyle::Typed)
+        );
+        assert!(
+            segments
+                .iter()
+                .any(|(text, style)| text == "you" && *style == PreeditStyle::Rest)
+        );
     }
 
     /// 只有「只在行内」不给窗口拼音行；另两档窗口都得画。

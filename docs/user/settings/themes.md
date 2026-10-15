@@ -99,7 +99,7 @@ themes/
 
 ## 字号与粗细
 
-`text.styles` 里有三种文字：`candidate`（候选词）、`annotation`（译词与拼音行）、`index`（序号与页码）。每种可以改字号 `size`、行高 `line_height` 与粗细 `weight`：
+`text.styles` 里有三种文字：`candidate`（候选词）、`annotation`（译词与拼音行）、`index`（序号与页码）。暂存区里的词用 `candidate` 的字号和 `text` 的颜色，跟候选词一起变；旁边的译文仍用译词的字号和颜色。每种可以改字号 `size`、行高 `line_height` 与粗细 `weight`：
 
 ```json
 "text": {

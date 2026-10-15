@@ -76,6 +76,7 @@
 
     "whale-preedit": {
       "type": "preedit", "font": "preedit", "typed": "@ink", "rest": "#6580a7", "struck": "@faint",
+      "staging": "@text", "staging_font": "candidate",
       "caret": { "width": 1.5, "color": "@outline" }
     },
 

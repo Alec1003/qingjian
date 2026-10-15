@@ -13,4 +13,7 @@ pub enum PreeditStyle {
 
     /// 辅码码段：与剩余拼音同一个淡色，再压一道下划线区分。
     AuxCode,
+
+    /// 暂存的词：主题里候选词的字号和颜色。
+    Staging,
 }

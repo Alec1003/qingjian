@@ -70,6 +70,14 @@ pub(crate) enum NodeKind {
         /// 纠错改掉的字母，带删除线。
         struck: ColorSpec,
 
+        /// 暂存的词。不写时同 `typed`。
+        #[serde(default)]
+        staging: Option<ColorSpec>,
+
+        /// 暂存的词用的字体。不写时同 `font`。
+        #[serde(default)]
+        staging_font: Option<FontRef>,
+
         caret: CaretSpec,
 
         /// 拼音的描边。

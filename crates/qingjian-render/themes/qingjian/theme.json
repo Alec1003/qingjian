@@ -33,6 +33,7 @@
       "children": [
         { "type": "preedit", "when": "preedit", "font": "annotation",
           "typed": "@gloss", "rest": "@faint", "struck": "@faint",
+          "staging": "@text", "staging_font": "candidate",
           "caret": { "width": 1.5, "color": "@text" } },
         { "type": "frame", "when": "trailing", "children": [
           { "type": "icon", "icon": "cloud", "when": "trailing.cloud", "size": 13, "height": 15,
