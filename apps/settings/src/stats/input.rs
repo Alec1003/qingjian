@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use jiff::civil::Date;
 use qingjian_core::Usage;
 
-use super::{first_of_month, week_start, speed, sum_days};
+use super::{first_of_month, speed, sum_days, week_start};
 
 /// 算「最快一天」时，一天至少打这么久才算（毫秒）。
 const FASTEST_MIN_MS: u64 = 5 * 60_000;

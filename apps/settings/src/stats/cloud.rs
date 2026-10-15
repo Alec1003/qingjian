@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use jiff::civil::Date;
 use qingjian_predict::{ApiUsageHour, ApiUsageStats};
 
-use super::{first_of_month, week_start, sum_days};
+use super::{first_of_month, sum_days, week_start};
 
 #[derive(Debug, Clone, Default)]
 pub struct CloudStats {
