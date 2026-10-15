@@ -37,6 +37,10 @@ pub struct ShortcutConfig {
     /// 把应用里选中的文字译成学习语言（需要云服务开着）。
     pub translate_selection: KeyCombo,
 
+    /// 暂存区译文已经回来时，把译文写入应用。缺省 `Shift + Enter`。
+    #[serde(default = "staging_translation_commit")]
+    pub commit_staging_translation: KeyCombo,
+
     /// 数字键配这些修饰键：删掉候选（用户词整个删掉，词库词清掉对它的学习）。
     pub delete_candidate: Modifiers,
 }
@@ -57,9 +61,14 @@ impl Default for ShortcutConfig {
             translation,
             translation_second,
             translate_selection: KeyCombo::TRANSLATE_DEFAULT,
+            commit_staging_translation: staging_translation_commit(),
             delete_candidate: Modifiers::SHIFT,
         }
     }
+}
+
+fn staging_translation_commit() -> KeyCombo {
+    KeyCombo::STAGING_TRANSLATION_COMMIT
 }
 
 impl ShortcutConfig {
@@ -128,6 +137,10 @@ mod tests {
         let default = ShortcutConfig::default();
         let parsed: ShortcutConfig = toml::from_str("expression = \"i\"\n").unwrap();
         assert_eq!(parsed.mode.expression, 'i');
+        assert_eq!(
+            parsed.commit_staging_translation,
+            KeyCombo::STAGING_TRANSLATION_COMMIT
+        );
         assert_eq!(parsed.switch_mode, SwitchKeys::default());
         assert_eq!(
             parsed.translation_keys(),

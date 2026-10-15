@@ -180,6 +180,8 @@ translation_second = "shift+option"
 # 把应用里选中的文字译成学习语言（要开着云服务）：译文先出现在候选窗口，回车替换选中的文字，Esc 保留原文
 # 修饰键 + 一个字母或数字，任意组合；避开 ⌘T 这类应用常用键
 translate_selection = "control+option+t"
+# 暂存区译文上屏：译文已经显示时，这组键把译文写入应用。回车仍写入中文暂存。译文还没回来时不写入
+commit_staging_translation = "shift+enter"
 # 数字键配这些修饰键删掉候选：用户词（云端选过的、自动造的）整个删掉，词库里的词清掉对它的学习记录。组句中要打感叹号先把词上屏
 delete_candidate = "shift"
 "#
@@ -199,6 +201,9 @@ translation = "ctrl"
 translation_second = "shift+ctrl"
 # 把应用里选中的文字译成学习语言（要开着云服务）：译文先出现在候选窗口，回车替换选中的文字，Esc 保留原文
 translate_selection = "ctrl+alt+t"
+# 暂存区译文上屏：译文已经显示时，这组键把译文写入应用。回车仍写入中文暂存。译文还没回来时不写入
+# 缺省 Shift+Enter，已经打开的应用也能收到。改成带 Ctrl / Alt 的组合后，要重新打开应用才收得到
+commit_staging_translation = "shift+enter"
 # 数字键配这些修饰键删掉候选：用户词（云端选过的、自动造的）整个删掉，词库里的词清掉对它的学习记录。组句中要打感叹号先把词上屏
 delete_candidate = "shift"
 "#
@@ -272,7 +277,7 @@ english_full_width_punctuation = false
 # 组句中敲会转全角的标点（, . ? ! 等，翻页键除外）先把高亮候选上屏、再补该标点（nihao, 一气打完「你好，」）；
 # 缺省 false：标点进英文直输段，与以前一致
 punct_commits = false
-# 数字键进暂存区：1–9 先把候选留在候选窗里，回车才整段写入应用；拼音空了之后可以用左右键和退格改其中一格。
+# 数字键进暂存区：1–9 先把候选留在候选窗里，回车才整段写入应用；拼音空了之后可以用左右键移动位置，退格一次删一个字。
 # 缺省 false：数字键仍直接上屏。空格不受影响
 staging = false
 # 辅码触发键：拼音打完之后敲它进辅码态，之后敲的字母按码表缩小候选范围；缺省是分号

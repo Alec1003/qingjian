@@ -2,7 +2,7 @@
 
 use qingjian_core::{QUESTION_PREFIX, punctuation, shortcut};
 use qingjian_platform::HighlightKeys;
-use qingjian_platform::protocol::KeyEvent;
+use qingjian_platform::protocol::{KeyEvent, KeyModifiers};
 
 use super::{Effect, codes, with_prefix};
 use crate::dispatch::Router;
@@ -12,6 +12,9 @@ impl Router {
     /// 表达式模式里 Shift + 数字打的是 `^ * ( )`，不当快捷键。
     pub(crate) fn apply_key(&mut self, event: &KeyEvent) -> Effect {
         if let Some(effect) = self.apply_panel_key(event) {
+            return effect;
+        }
+        if let Some(effect) = self.commit_staging_translation_key(event) {
             return effect;
         }
         if self.composing()
@@ -84,6 +87,34 @@ impl Router {
         }
         self.engine.note_passthrough(QUESTION_PREFIX);
         QUESTION_PREFIX.to_string()
+    }
+
+    /// 暂存区译文已经显示时，配置的快捷键把译文写入应用，中文暂存不记学习。
+    /// 译文还没回来时吃掉这个键。没在等译文时返回 `None`，回车仍按原来的方式写入中文。
+    fn commit_staging_translation_key(&mut self, event: &KeyEvent) -> Option<Effect> {
+        if !self.matches_staging_translation_commit(event) {
+            return None;
+        }
+        let gloss = self.staging_gloss.as_ref()?;
+        let Some(text) = gloss.translation.clone().filter(|text| !text.is_empty()) else {
+            return Some(Effect::Changed(None));
+        };
+        self.engine.abandon_staging(&text);
+        self.staging_gloss = None;
+        self.engine.cancel_staging_translation();
+        Some(Effect::Changed(Some(text)))
+    }
+
+    fn matches_staging_translation_commit(&self, event: &KeyEvent) -> bool {
+        let combo = self.config.commit_staging_translation;
+        let key_matches = if combo.is_enter() {
+            event.virtual_key == codes::RETURN
+        } else {
+            event
+                .character
+                .is_some_and(|character| character.eq_ignore_ascii_case(&combo.key))
+        };
+        key_matches && event.modifiers.chord() == KeyModifiers::from(combo.modifiers)
     }
 
     /// 退格 / Esc / 回车 / Tab / 方向键；没在组句时都交还应用。

@@ -181,9 +181,7 @@ impl Component for Settings {
             Message::CloudSentenceTranslation(on) => {
                 self.save("predict", "sentence_translation", on)
             }
-            Message::CloudStagingTranslation(on) => {
-                self.save("predict", "staging_translation", on)
-            }
+            Message::CloudStagingTranslation(on) => self.save("predict", "staging_translation", on),
             Message::TestConnection => {
                 if matches!(self.cloud_status, CloudStatus::Testing) {
                     return;
@@ -238,6 +236,13 @@ impl Component for Settings {
                 let key = self.config.shortcut.translate_selection.key;
                 let combo = format!("{}+{key}", shortcut::MODIFIERS[i].1);
                 self.save("shortcut", "translate_selection", combo);
+            }
+            Message::CommitStagingTranslation(Some(i)) if i < shortcut::MODIFIERS.len() => {
+                self.save(
+                    "shortcut",
+                    "commit_staging_translation",
+                    format!("{}+enter", shortcut::MODIFIERS[i].1),
+                );
             }
 
             // 模糊音页

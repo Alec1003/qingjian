@@ -135,6 +135,14 @@ pub(crate) fn view(settings: &Settings, context: &mut ViewContext<Settings>) -> 
             ),
         ),
         field(
+            "暂存区译文上屏",
+            "译文已经显示在候选窗里时，按这组键 + Enter（缺省 Shift + Enter）把译文写入应用。Enter 仍写入中文。译文还没回来时不写入。带 Ctrl 或 Alt 的组合，已经打开的应用要重新打开才收得到。",
+            modifier_combo(
+                s.commit_staging_translation.modifiers,
+                context.callback(Message::CommitStagingTranslation),
+            ),
+        ),
+        field(
             "翻译选中文字",
             "选中一段文字后按这组键 + 当前字母（缺省 Ctrl+Alt+T），把它译成学习语言，回车 / 空格替换、Esc 保留原文。需要云服务。这里只改修饰键，字母固定用当前的。",
             modifier_combo(

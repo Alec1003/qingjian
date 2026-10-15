@@ -157,7 +157,7 @@ pub(crate) fn view(settings: &Settings, context: &mut ViewContext<Settings>) -> 
         ),
         field(
             "数字键进暂存区",
-            "1–9 先把候选留在候选窗里，回车才整段写入应用。拼音打完后可以用左右键和退格改其中一格。关掉后数字键仍直接上屏。",
+            "1–9 先把候选留在候选窗里，回车才整段写入应用。拼音打完后可以用左右键移动位置，退格一次删一个字。关掉后数字键仍直接上屏。",
             ToggleSwitch::new()
                 .is_on(g.staging)
                 .on_toggled(context.callback(Message::Staging)),

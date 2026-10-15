@@ -254,6 +254,33 @@ fn staging_sentence_is_translated_without_blocking_input() {
 }
 
 #[test]
+fn shift_enter_commits_the_staging_translation() {
+    let submitted = Arc::new(Mutex::new(Vec::new()));
+    let mut router = router_with(RouterConfig {
+        staging: true,
+        staging_translation: true,
+        sentence_translation: false,
+        ..RouterConfig::default()
+    });
+    router
+        .engine_mut()
+        .set_predictor(Box::new(SentenceTranslator::new(submitted.clone())));
+    let (_, _, frame) = type_letters(&mut router, "nihao");
+    let position = frame
+        .candidates
+        .items
+        .iter()
+        .position(|candidate| candidate.text == "你好")
+        .expect("「你好」在候选页内");
+    press(&mut router, digit(position as u32 + 1));
+
+    let (_, commit, after) = press(&mut router, KeyEvent::new(0x0D, None, SHIFT));
+    assert_eq!(commit.as_deref(), Some("It seems not to work."));
+    assert!(after.staging.is_empty());
+    assert!(after.staging_translation.is_none());
+}
+
+#[test]
 fn staging_translation_stays_off_until_asked() {
     let submitted = Arc::new(Mutex::new(Vec::new()));
     let mut router = router_with(RouterConfig {

@@ -22,6 +22,9 @@ struct Staged {
 
     /// 整句路径上的词。收进暂存时就算好，确认时拼音已经不在了。
     sentence_words: Option<Vec<crate::sentence::SentenceWord>>,
+
+    /// 退格改过字。确认时仍写入剩下的文本，不再按原来的候选记学习。
+    edited: bool,
 }
 
 /// 暂存的词和插入位置。光标在第 `cursor` 格之前，下一词插在这里。
@@ -29,7 +32,7 @@ struct Staged {
 pub(super) struct Staging {
     items: Vec<Staged>,
 
-    /// 0 到 `items.len()`：下一词插入的位置，退格删的是它前面那一格。
+    /// 0 到 `items.len()`：下一词插入的位置，退格删的是它前面那一格的末字。
     cursor: usize,
 }
 
@@ -64,6 +67,7 @@ impl Engine {
             input,
             typos,
             sentence_words,
+            edited: false,
         };
         self.forget_span_cache();
         self.composition.drain_prefix(consumed);
@@ -125,13 +129,39 @@ impl Engine {
         self.staging.cursor = cursor.min(self.staging.items.len());
     }
 
-    /// 删掉光标前的那一格。光标已经在开头时返回 `false`。
+    /// 丢掉暂存区，不记学习。`committed` 是壳写入应用的文本，之后的退格按它计数。
+    pub fn abandon_staging(&mut self, committed: &str) {
+        self.staging.clear();
+        if committed.is_empty() {
+            return;
+        }
+        self.chain.reset();
+        self.punctuation.note_committed(committed);
+        self.history.record(committed);
+        let mut plain = LastCommit::plain(committed);
+        plain.chars = committed.chars().count();
+        plain.tail = committed.chars().last();
+        self.remember_commit(plain);
+    }
+
+    /// 删掉光标前一个字。这一格删空后才去掉，后面的词留着。光标已经在开头时返回 `false`。
     pub fn staging_backspace(&mut self) -> bool {
         if self.staging.cursor == 0 || self.staging.items.is_empty() {
             return false;
         }
-        self.staging.cursor -= 1;
-        self.staging.items.remove(self.staging.cursor);
+        let index = self.staging.cursor - 1;
+        let Some((split, _)) = self.staging.items[index].text.char_indices().next_back() else {
+            self.staging.cursor -= 1;
+            self.staging.items.remove(index);
+            return true;
+        };
+        if split == 0 {
+            self.staging.cursor -= 1;
+            self.staging.items.remove(index);
+            return true;
+        }
+        self.staging.items[index].text.truncate(split);
+        self.staging.items[index].edited = true;
         true
     }
 
@@ -178,6 +208,16 @@ impl Engine {
 
     /// 确认一格：补上收进时故意没记的词频、转移和输入日志。
     fn learn_staged(&mut self, staged: &Staged, buffer_left: bool) {
+        if staged.edited {
+            self.chain.reset();
+            self.punctuation.note_committed(&staged.text);
+            self.history.record(&staged.text);
+            let mut plain = LastCommit::plain(&staged.text);
+            plain.chars = staged.text.chars().count();
+            plain.tail = staged.text.chars().last();
+            self.remember_commit(plain);
+            return;
+        }
         let candidate = &staged.candidate;
         self.recording.clear();
         match candidate.kind {

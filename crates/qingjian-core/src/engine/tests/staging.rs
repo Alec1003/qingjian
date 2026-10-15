@@ -92,6 +92,47 @@ fn cursor_inserts_and_backspace_removes_one_slot() {
 }
 
 #[test]
+fn staging_backspace_removes_one_character_and_skips_learning() {
+    let recorded = Arc::new(Mutex::new(Vec::new()));
+    let mut engine = engine().with_learner(Box::new(RecordingLearner(recorded.clone())));
+    engine.set_input("kaifa");
+    let developed = engine
+        .query()
+        .unwrap()
+        .candidates
+        .items
+        .into_iter()
+        .find(|candidate| candidate.text == "开发")
+        .expect("开发");
+    assert!(engine.stage(&developed));
+    assert!(engine.staging_backspace());
+    assert_eq!(engine.staging_words(), vec!["开".to_owned()]);
+    assert_eq!(engine.staging_cursor(), 1);
+    assert_eq!(engine.confirm_staging().as_deref(), Some("开"));
+    assert!(recorded.lock().expect("记录").is_empty());
+}
+
+#[test]
+fn abandoning_staging_for_a_translation_does_not_learn_the_chinese() {
+    let recorded = Arc::new(Mutex::new(Vec::new()));
+    let mut engine = engine().with_learner(Box::new(RecordingLearner(recorded.clone())));
+    engine.set_input("kaifa");
+    let developed = engine
+        .query()
+        .unwrap()
+        .candidates
+        .items
+        .into_iter()
+        .find(|candidate| candidate.text == "开发")
+        .expect("开发");
+    assert!(engine.stage(&developed));
+    engine.abandon_staging("develop");
+    assert!(!engine.has_staging());
+    assert!(engine.confirm_staging().is_none());
+    assert!(recorded.lock().expect("记录").is_empty());
+}
+
+#[test]
 fn confirm_records_learning_and_stage_does_not() {
     let recorded = Arc::new(Mutex::new(Vec::new()));
     let mut engine = engine().with_learner(Box::new(RecordingLearner(recorded.clone())));

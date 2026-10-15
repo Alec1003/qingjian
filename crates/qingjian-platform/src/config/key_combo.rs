@@ -27,18 +27,35 @@ impl KeyCombo {
         key: 't',
     };
 
-    /// 配置文件里的写法。
-    pub fn key_string(&self) -> String {
-        format!("{}+{}", self.modifiers.key(), self.key)
+    /// 暂存区译文上屏。`key == '\n'` 表示回车。
+    pub const STAGING_TRANSLATION_COMMIT: Self = Self {
+        modifiers: Modifiers::SHIFT,
+        key: '\n',
+    };
+
+    /// 是不是回车，而不是字母或数字。
+    pub fn is_enter(self) -> bool {
+        self.key == '\n'
     }
 
-    /// 给人看的写法：`⌃⌥T`。
+    /// 配置文件里的写法。
+    pub fn key_string(&self) -> String {
+        let key = if self.is_enter() {
+            "enter".to_owned()
+        } else {
+            self.key.to_string()
+        };
+        format!("{}+{key}", self.modifiers.key())
+    }
+
+    /// 给人看的写法：`⌃⌥T`，回车写成 `Enter`。
     pub fn label(&self) -> String {
-        format!(
-            "{}{}",
-            self.modifiers.label(),
-            self.key.to_ascii_uppercase()
-        )
+        let key = if self.is_enter() {
+            "Enter".to_owned()
+        } else {
+            self.key.to_ascii_uppercase().to_string()
+        };
+        format!("{}{key}", self.modifiers.label())
     }
 }
 
@@ -56,13 +73,18 @@ impl FromStr for KeyCombo {
             .trim()
             .rsplit_once('+')
             .ok_or_else(|| format!("expected modifiers+key, got {text:?}"))?;
-        let mut chars = key.trim().chars();
-        let (Some(key), None) = (chars.next(), chars.next()) else {
-            return Err(format!("key must be a single character: {key:?}"));
+        let key = if key.trim().eq_ignore_ascii_case("enter") {
+            '\n'
+        } else {
+            let mut chars = key.trim().chars();
+            let (Some(key), None) = (chars.next(), chars.next()) else {
+                return Err(format!("key must be a single character: {key:?}"));
+            };
+            if !key.is_ascii_alphanumeric() && key != '.' {
+                return Err(format!("key must be a letter, digit or period: {key:?}"));
+            }
+            key
         };
-        if !key.is_ascii_alphanumeric() && key != '.' {
-            return Err(format!("key must be a letter, digit or period: {key:?}"));
-        }
         Ok(Self {
             modifiers: modifiers.parse()?,
             key: key.to_ascii_lowercase(),
@@ -100,6 +122,10 @@ mod tests {
         assert_eq!(combo, KeyCombo::TRANSLATE_DEFAULT);
         assert_eq!(combo.label(), "⌃⌥T");
         assert_eq!(combo.key_string(), "control+option+t");
+        let enter: KeyCombo = "shift+enter".parse().unwrap();
+        assert_eq!(enter, KeyCombo::STAGING_TRANSLATION_COMMIT);
+        assert_eq!(enter.label(), "⇧Enter");
+        assert_eq!(enter.key_string(), "shift+enter");
         assert!("t".parse::<KeyCombo>().is_err());
         assert!("option+tt".parse::<KeyCombo>().is_err());
         assert!("option+-".parse::<KeyCombo>().is_err());
