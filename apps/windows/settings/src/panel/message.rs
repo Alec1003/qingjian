@@ -25,6 +25,8 @@ pub(crate) enum Message {
     EnglishFullWidthPunctuation(bool),
     /// 组句中会转全角的标点先把高亮候选上屏再补标点。
     PunctCommits(bool),
+    /// 数字键把候选收进暂存区，回车才写入应用。
+    Staging(bool),
     /// 开=写入平台缺省白名单，关=写 `["*"]`（处处都给）。
     EnglishOnlyInApps(bool),
     /// 勾上 / 去掉一个中英切换键。
@@ -62,6 +64,8 @@ pub(crate) enum Message {
     CloudSlots(Option<f64>),
     CloudSentence(bool),
     CloudSentenceTranslation(bool),
+    /// 暂存区整句发给服务连接取译文。
+    CloudStagingTranslation(bool),
     TestConnection,
     CloudTestDone(Result<String, String>),
 

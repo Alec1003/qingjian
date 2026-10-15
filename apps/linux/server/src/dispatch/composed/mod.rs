@@ -142,6 +142,9 @@ impl Router {
                 sentence: None,
                 notice: self.notice.clone(),
                 symbol_panel: false,
+                staging: Vec::new(),
+                staging_cursor: 0,
+                staging_translation: None,
             },
             Some(Composed::Candidates {
                 preedit,
@@ -182,6 +185,9 @@ impl Router {
                     sentence: self.sentence.clone(),
                     notice: self.notice.clone(),
                     symbol_panel: false,
+                    staging: Vec::new(),
+                    staging_cursor: 0,
+                    staging_translation: None,
                 }
             }
         }

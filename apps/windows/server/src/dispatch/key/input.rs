@@ -105,8 +105,15 @@ impl Router {
         }
         match event.virtual_key {
             codes::BACK => {
-                self.engine.backspace();
-                Effect::Changed(None)
+                if self.engine.composition().is_empty()
+                    && !self.engine.in_aux()
+                    && self.engine.staging_backspace()
+                {
+                    Effect::Changed(None)
+                } else {
+                    self.engine.backspace();
+                    Effect::Changed(None)
+                }
             }
             codes::ESCAPE => {
                 // 辅码态里 Esc 只清码段、拼音留着（与 Core 的 clear_aux 语义一致）
@@ -118,12 +125,19 @@ impl Router {
                 Effect::Changed(None)
             }
             codes::RETURN => {
-                if self.engine.is_zhuyin_mode() {
-                    if event.modifiers.shift {
-                        Effect::Changed(Some(self.engine.take_raw()))
+                if self.engine.is_zhuyin_mode() && event.modifiers.shift {
+                    Effect::Changed(Some(self.confirm_staging_and_raw()))
+                } else if self.engine.is_zhuyin_mode() && !self.engine.composition().is_empty() {
+                    if self.config.staging {
+                        self.stage_highlight();
+                        Effect::Changed(None)
                     } else {
                         Effect::Changed(Some(self.commit_highlighted()))
                     }
+                } else if self.config.staging && self.engine.has_staging() {
+                    Effect::Changed(Some(self.confirm_staging_and_raw()))
+                } else if self.engine.is_zhuyin_mode() {
+                    Effect::Changed(Some(self.commit_highlighted()))
                 } else {
                     Effect::Changed(Some(self.engine.take_raw()))
                 }
@@ -158,11 +172,19 @@ impl Router {
             codes::LEFT => self.horizontal_key(-1),
             codes::RIGHT => self.horizontal_key(1),
             codes::HOME => {
-                self.engine.move_cursor_home();
+                if self.engine.composition().is_empty() && self.engine.has_staging() {
+                    self.engine.set_staging_cursor(0);
+                } else {
+                    self.engine.move_cursor_home();
+                }
                 Effect::Changed(None)
             }
             codes::END => {
-                self.engine.move_cursor_end();
+                if self.engine.composition().is_empty() && self.engine.has_staging() {
+                    self.engine.set_staging_cursor(usize::MAX);
+                } else {
+                    self.engine.move_cursor_end();
+                }
                 Effect::Changed(None)
             }
             _ => Effect::Passthrough,
@@ -205,6 +227,9 @@ impl Router {
 
     /// 拼音光标左右移一格。已在开头 / 末尾时返回 `false`，调用方据此溢出到另一个动作。
     fn move_caret(&mut self, step: isize) -> bool {
+        if self.engine.composition().is_empty() && self.engine.has_staging() {
+            return self.engine.move_staging_cursor(step);
+        }
         if step < 0 {
             self.engine.move_cursor_left()
         } else {
@@ -279,7 +304,7 @@ impl Router {
             && let Some(digit) = codes::digit(event)
             && let Some(index) = self.slot_index(digit)
         {
-            return Effect::Changed(self.commit_index(index));
+            return Effect::Changed(self.select_slot(index));
         }
         // 翻页键要排在连字符前面，否则 `-` 永远翻不回上一页；翻不动时 `-` 照旧是单词里的连字符（`well-known`）
         if composing
@@ -350,7 +375,7 @@ impl Router {
             && (!self.engine.is_zhuyin_mode() || self.navigated)
         {
             if let Some(index) = self.slot_index(digit) {
-                return Effect::Changed(self.commit_index(index));
+                return Effect::Changed(self.select_slot(index));
             }
             // 问字模式里数字不是问题的一部分：没有这一格就不算
             if self.engine.question_mode() {
@@ -398,15 +423,53 @@ impl Router {
         (digit <= page_size && index < self.candidate_count()).then_some(index)
     }
 
-    /// 上屏高亮候选；没有候选时缓冲原样上屏。
+    /// 数字键或注音的回车选中一格：开了暂存区就收进去，否则直接上屏。
+    pub(in crate::dispatch) fn select_slot(&mut self, index: usize) -> Option<String> {
+        if self.config.staging
+            && let Some(candidate) = self.layout_candidate(index)
+            && self.engine.stage(&candidate)
+        {
+            return None;
+        }
+        self.commit_index(index)
+    }
+
+    /// 注音模式下回车选高亮，开了暂存区时收进暂存区。
+    fn stage_highlight(&mut self) {
+        let _ = self.select_slot(self.highlight);
+    }
+
+    /// 暂存区里的词先写出去，剩下的拼音仍按回车原样上屏。
+    /// 先收走拼音，确认时缓冲区已经空了，最后一格按句尾记。
+    fn confirm_staging_and_raw(&mut self) -> String {
+        let raw = if self.engine.composition().is_empty() {
+            String::new()
+        } else {
+            self.engine.take_raw()
+        };
+        let staged = if self.config.staging {
+            self.engine.confirm_staging().unwrap_or_default()
+        } else {
+            String::new()
+        };
+        format!("{staged}{raw}")
+    }
+
+    /// 上屏高亮候选；没有候选时缓冲原样上屏。暂存区里已有的词排在前面一起写出去。
     fn commit_highlighted(&mut self) -> String {
-        match self.commit_index(self.highlight) {
+        let staged = if self.config.staging {
+            self.engine.confirm_staging().unwrap_or_default()
+        } else {
+            String::new()
+        };
+        let word = match self.commit_index(self.highlight) {
             Some(text) => text,
             None => self.engine.take_raw(),
-        }
+        };
+        format!("{staged}{word}")
     }
 
     pub(in crate::dispatch) fn composing(&self) -> bool {
-        !self.engine.composition().is_empty()
+        !self.engine.composition().is_empty() || self.engine.has_staging()
     }
 }

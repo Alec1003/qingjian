@@ -51,12 +51,21 @@ impl Router {
         }
     }
 
-    /// 焦点离开：把缓冲区原样交出并清组句。组句不属于 `session` 时只清不交，别把 A 应用的拼音落进 B。
+    /// 焦点离开：暂存区里的词和剩下的拼音一起交出，再清组句。组句不属于 `session` 时只清不交，别把 A 应用的拼音落进 B。
     pub(super) fn commit_raw_for(&mut self, session: SessionId) -> Option<String> {
-        let text = (self.focused == Some(session) && !self.engine.composition().is_empty())
-            .then(|| self.engine.take_raw());
+        if self.focused != Some(session) {
+            self.reset_composition();
+            return None;
+        }
+        let raw = if self.engine.composition().is_empty() {
+            String::new()
+        } else {
+            self.engine.take_raw()
+        };
+        let staged = self.engine.confirm_staging().unwrap_or_default();
+        let text = format!("{staged}{raw}");
         self.reset_composition();
-        text
+        (!text.is_empty()).then_some(text)
     }
 
     /// 清掉组句、展示状态、在飞的云联想与翻译评审，收起候选窗口。
@@ -66,6 +75,7 @@ impl Router {
         self.cancel_prediction();
         self.stop_rescoring();
         self.composed = None;
+        self.staging_gloss = None;
         self.translation = None;
         self.pending_selection = None;
         self.sentence = None;

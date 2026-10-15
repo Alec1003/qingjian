@@ -21,6 +21,12 @@ pub struct RouterConfig {
     /// 本地整句候选是否异步请求译文（`[predict] sentence_translation`）。
     pub sentence_translation: bool,
 
+    /// 暂存区整句是否异步请求译文（`[predict] staging_translation`）。
+    pub staging_translation: bool,
+
+    /// 数字键把候选收进暂存区，回车才写入应用（`[general] staging`）。
+    pub staging: bool,
+
     /// 中文模式下 Shift+字母收进组句缓冲区（`[general] shift_letter = "compose"`）。
     /// 关着（缺省）时壳把大写字母交给应用，与以前一致。
     pub shift_letter_compose: bool,
@@ -153,6 +159,8 @@ impl From<&Config> for RouterConfig {
             cloud_slots: config.predict.slots,
             cloud_enabled: config.predict.enabled,
             sentence_translation: config.predict.sentence_translation,
+            staging_translation: config.predict.staging_translation,
+            staging: config.general.staging,
             shift_letter_compose: config.general.shift_letter.compose(),
             layout: config.general.layout,
             appearance: config.general.appearance(),

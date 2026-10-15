@@ -25,6 +25,7 @@ mod rescoring;
 mod session;
 mod setup;
 mod spacing;
+mod staging;
 mod statistics;
 mod timings;
 mod translator;
@@ -108,6 +109,9 @@ pub struct Engine {
 
     /// 当前拼音缓冲区。
     composition: Composition,
+
+    /// 数字键收进、尚未写入应用的词。拼音空了之后可以改其中一格。
+    staging: staging::Staging,
 
     /// 英文词表，中英混输用；没有就不出英文候选。
     english: Option<WordList>,
@@ -418,6 +422,7 @@ impl Engine {
             modes: ModeKeys::default(),
             learner: learning::MutedLearner::new(Box::new(NoLearner)),
             composition: Composition::default(),
+            staging: staging::Staging::default(),
             english: None,
             english_mode: false,
             punctuation: Punctuation::default(),

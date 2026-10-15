@@ -19,20 +19,38 @@ impl Router {
         if self.translation.is_some() || !self.composing() {
             return;
         }
-        let text = match target {
-            HitTarget::Candidate(offset) => self
-                .slot_index(offset + 1)
-                .and_then(|index| self.commit_index(index)),
-            HitTarget::Translation { candidate, sense } => self
-                .annotated_candidate_on_page(candidate + 1)
-                .and_then(|candidate| self.engine.commit_translation(&candidate, sense)),
-        };
-        let Some(text) = text else {
-            tracing::debug!(?target, "点中的格子没有可上屏的");
-            return;
-        };
-        tracing::debug!(?target, "点击上屏");
-        self.deliver_clicked(session, text);
+        match target {
+            HitTarget::Candidate(offset) => {
+                let Some(index) = self.slot_index(offset + 1) else {
+                    tracing::debug!(?target, "点中的格子没有可上屏的");
+                    return;
+                };
+                let before = self.engine.staging_words().len();
+                match self.select_slot(index) {
+                    Some(text) => {
+                        tracing::debug!(?target, "点击上屏");
+                        self.deliver_clicked(session, text);
+                    }
+                    None if self.engine.staging_words().len() != before => {
+                        self.recompose();
+                        let shown = self.self_drawn_frame();
+                        self.reconcile_candidates(&shown);
+                    }
+                    None => tracing::debug!(?target, "点中的格子没有可上屏的"),
+                }
+            }
+            HitTarget::Translation { candidate, sense } => {
+                let Some(text) = self
+                    .annotated_candidate_on_page(candidate + 1)
+                    .and_then(|candidate| self.engine.commit_translation(&candidate, sense))
+                else {
+                    tracing::debug!(?target, "点中的格子没有可上屏的");
+                    return;
+                };
+                tracing::debug!(?target, "点击上屏");
+                self.deliver_clicked(session, text);
+            }
+        }
     }
 
     /// 收得了点击的聚焦会话：DLL 太老、读不到 `Update.commit` 时不收。

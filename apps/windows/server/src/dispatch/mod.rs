@@ -62,6 +62,9 @@ pub struct Router {
     /// 当前组句的展示状态；没在组句时为 `None`。
     composed: Option<Composed>,
 
+    /// 暂存区整句的译文。拼音空了也留着，候选窗靠它画在暂存文字旁边。
+    staging_gloss: Option<composed::StagingGloss>,
+
     /// 「翻译选中文字」进行态；与 `composed` 互斥。
     translation: Option<Translation>,
 
@@ -155,6 +158,7 @@ impl Router {
             sessions: HashMap::new(),
             focused: None,
             composed: None,
+            staging_gloss: None,
             translation: None,
             pending_selection: None,
             clicked: None,

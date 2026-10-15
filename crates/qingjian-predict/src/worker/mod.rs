@@ -88,6 +88,9 @@ impl Worker {
             if !pending.is_empty() && self.suspension.active(start) {
                 continue;
             }
+            if pending.is_empty() {
+                continue;
+            }
             last_sent = Some(start);
             match pending.as_slice() {
                 [] => {}
@@ -128,6 +131,7 @@ impl Worker {
         let mut composition = None;
         let mut translation = None;
         match first.kind {
+            PredictionKind::Translate if first.text.is_empty() => {}
             PredictionKind::Translate => translation = Some(first),
             PredictionKind::Compose | PredictionKind::Question => composition = Some(first),
         }
@@ -153,15 +157,17 @@ impl Worker {
                 })
             };
             match self.requests.recv_timeout(debounce.max(interval)) {
-                Ok(Some(newer)) => {
-                    match newer.kind {
-                        PredictionKind::Translate => translation = Some(newer),
-                        PredictionKind::Compose | PredictionKind::Question => {
-                            composition = Some(newer)
-                        }
+                Ok(Some(newer)) => match newer.kind {
+                    PredictionKind::Translate if newer.text.is_empty() => translation = None,
+                    PredictionKind::Translate => {
+                        translation = Some(newer);
+                        changed = Instant::now();
                     }
-                    changed = Instant::now();
-                }
+                    PredictionKind::Compose | PredictionKind::Question => {
+                        composition = Some(newer);
+                        changed = Instant::now();
+                    }
+                },
                 Ok(None) => return None,
                 Err(RecvTimeoutError::Timeout) => {
                     return Some(translation.into_iter().chain(composition).collect());

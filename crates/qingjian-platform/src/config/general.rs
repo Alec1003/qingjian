@@ -117,6 +117,9 @@ pub struct GeneralConfig {
     ///（`nihao,` 一气打完「你好，」）。缺省关：标点进英文直输段整段原样上屏，与以前一致。
     pub punct_commits: bool,
 
+    /// 数字键把候选收进暂存区，回车才写入应用。缺省关：数字键仍直接上屏。
+    pub staging: bool,
+
     /// 辅码触发键：拼音打完之后敲它进辅码态，缺省 `;`。校验 = 单字符、ASCII 可打印、
     /// 非字母数字、非翻页键（见 [`qingjian_core::is_valid_aux_code_key`]）。
     pub aux_code_key: String,
@@ -192,6 +195,7 @@ impl Default for GeneralConfig {
             full_width_punctuation: true,
             english_full_width_punctuation: false,
             punct_commits: false,
+            staging: false,
             aux_code_key: qingjian_core::DEFAULT_AUX_CODE_KEY.to_string(),
             aux_code_show: false,
             aux_code_keep_empty: true,

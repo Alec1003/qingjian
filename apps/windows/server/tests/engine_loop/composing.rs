@@ -182,6 +182,134 @@ fn selecting_by_digit_commits_and_clears() {
 }
 
 #[test]
+fn digit_stages_until_enter_when_staging_is_on() {
+    let mut router = router_with(RouterConfig {
+        staging: true,
+        ..RouterConfig::default()
+    });
+    let (_, _, frame) = type_letters(&mut router, "nihao");
+    let position = frame
+        .candidates
+        .items
+        .iter()
+        .position(|candidate| candidate.text == "你好")
+        .expect("「你好」在候选页内");
+    let (outcome, commit, after) = press(&mut router, digit(position as u32 + 1));
+
+    assert_eq!(outcome, KeyOutcome::Consumed);
+    assert!(commit.is_none(), "数字键只进暂存区");
+    assert_eq!(after.staging, vec!["你好".to_owned()]);
+    assert_eq!(
+        preedit(&after),
+        "你好",
+        "输入框里留着暂存区，回车才不会被应用拿走"
+    );
+    assert!(!after.is_empty(), "暂存区还在，窗口不收");
+
+    let (outcome, commit, after) =
+        press(&mut router, KeyEvent::new(0x0D, None, Default::default()));
+    assert_eq!(outcome, KeyOutcome::Consumed);
+    assert_eq!(commit.as_deref(), Some("你好"));
+    assert!(after.staging.is_empty());
+    assert!(after.is_empty());
+}
+
+#[test]
+fn staging_sentence_is_translated_without_blocking_input() {
+    let submitted = Arc::new(Mutex::new(Vec::new()));
+    let mut router = router_with(RouterConfig {
+        staging: true,
+        staging_translation: true,
+        sentence_translation: false,
+        ..RouterConfig::default()
+    });
+    router
+        .engine_mut()
+        .set_predictor(Box::new(SentenceTranslator::new(submitted.clone())));
+    let (_, _, frame) = type_letters(&mut router, "nihao");
+    let position = frame
+        .candidates
+        .items
+        .iter()
+        .position(|candidate| candidate.text == "你好")
+        .expect("「你好」在候选页内");
+    let (_, commit, after) = press(&mut router, digit(position as u32 + 1));
+
+    assert!(commit.is_none(), "数字键只进暂存区，不等译文");
+    assert_eq!(after.staging, vec!["你好".to_owned()]);
+    assert_eq!(
+        after.staging_translation.as_deref(),
+        Some("It seems not to work.")
+    );
+    let requests = submitted.lock().unwrap();
+    let translations: Vec<&PredictionRequest> = requests
+        .iter()
+        .filter(|request| request.kind == PredictionKind::Translate && !request.text.is_empty())
+        .collect();
+    assert_eq!(translations.len(), 1, "同一句只发一次");
+    assert_eq!(translations[0].text, "你好");
+    assert_eq!(translations[0].target_language, "en");
+    assert!(!translations[0].manual, "停一下再发");
+    assert!(translations[0].before.is_empty() && translations[0].after.is_empty());
+}
+
+#[test]
+fn staging_translation_stays_off_until_asked() {
+    let submitted = Arc::new(Mutex::new(Vec::new()));
+    let mut router = router_with(RouterConfig {
+        staging: true,
+        staging_translation: false,
+        ..RouterConfig::default()
+    });
+    router
+        .engine_mut()
+        .set_predictor(Box::new(SentenceTranslator::new(submitted.clone())));
+    let (_, _, frame) = type_letters(&mut router, "nihao");
+    let position = frame
+        .candidates
+        .items
+        .iter()
+        .position(|candidate| candidate.text == "你好")
+        .expect("「你好」在候选页内");
+    press(&mut router, digit(position as u32 + 1));
+
+    assert!(
+        submitted.lock().unwrap().iter().all(|request| {
+            request.kind != PredictionKind::Translate || request.text.is_empty()
+        })
+    );
+}
+
+#[test]
+fn leaving_focus_writes_staging() {
+    let mut router = router_with(RouterConfig {
+        staging: true,
+        ..RouterConfig::default()
+    });
+    let (_, _, frame) = type_letters(&mut router, "nihao");
+    let position = frame
+        .candidates
+        .items
+        .iter()
+        .position(|candidate| candidate.text == "你好")
+        .expect("「你好」在候选页内");
+    press(&mut router, digit(position as u32 + 1));
+
+    let committed = router.handle(ClientMessage::Commit { session: SESSION });
+    assert_eq!(
+        committed,
+        Some(ServerMessage::Committed {
+            session: SESSION,
+            text: Some("你好".to_owned()),
+        })
+    );
+    assert!(matches!(
+        router.handle(ClientMessage::Poll { session: SESSION }),
+        Some(ServerMessage::Update { frame, .. }) if frame.is_empty()
+    ));
+}
+
+#[test]
 fn space_commits_first_candidate() {
     let mut router = router();
     type_letters(&mut router, "ni");

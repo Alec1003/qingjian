@@ -207,6 +207,7 @@ impl Engine {
 
     pub fn clear(&mut self) {
         self.composition.clear();
+        self.staging.clear();
         self.panel = None;
         self.aux_code = None;
         self.chain.leave_buffer();

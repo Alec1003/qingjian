@@ -39,6 +39,9 @@ use crate::engine::input_log::{InputLogEntry, InputLogger, InputSource};
 use crate::parser::{self, Segmentation};
 use crate::{sentence, shortcut};
 
+/// 暂存区译文在待处理请求里的标记，和整句候选翻译分开，互不取消。
+const STAGING_TRANSLATION: &str = "staging";
+
 pub(crate) use pending::PendingPrediction;
 
 impl Engine {
@@ -194,19 +197,30 @@ impl Engine {
     /// （[`translation_target`]）。预测服务未接入、私密输入中、文字为空时不发，返回 `None`；
     /// 译文从 [`Self::poll_prediction`] 的 `sentence` 里出。不进学习、不动缓冲区。
     pub fn request_translation(&mut self, text: &str) -> Option<u64> {
-        self.submit_translation(text, true)
+        self.submit_translation(text, true, "")
     }
 
     /// 为当前整句候选请求译文。和组句联想一样等停键，避免输入变化时重复发出。
     pub fn request_sentence_translation(&mut self, text: &str) -> Option<u64> {
-        self.submit_translation(text, false)
+        self.submit_translation(text, false, "")
     }
 
-    fn submit_translation(&mut self, text: &str, manual: bool) -> Option<u64> {
+    /// 为暂存区里的整句请求译文。停键后才发，只发这一句，不带光标前后的文字。
+    /// 目标语言固定为学习语言，不按字母多少改成中文。
+    pub fn request_staging_translation(&mut self, text: &str) -> Option<u64> {
+        self.submit_translation(text, false, STAGING_TRANSLATION)
+    }
+
+    fn submit_translation(&mut self, text: &str, manual: bool, scope: &str) -> Option<u64> {
         let text = text.trim();
         if !self.predictor.is_enabled() || self.private || text.is_empty() {
             return None;
         }
+        let target_language = if scope == STAGING_TRANSLATION {
+            self.translator.language()
+        } else {
+            translation_target(text, self.translator.language())
+        };
         self.prediction_sequence += 1;
         let request = PredictionRequest {
             sequence: self.prediction_sequence,
@@ -222,18 +236,17 @@ impl Engine {
             max_items: 1,
             want_sentence: true,
             text: text.to_owned(),
-            target_language: translation_target(text, self.translator.language())
-                .code()
-                .to_owned(),
+            target_language: target_language.code().to_owned(),
         };
-        // 翻译只保留最新一条；组句联想可继续返回。
-        self.pending_predictions
-            .retain(|_, pending| pending.kind != PredictionKind::Translate);
+        // 同一路翻译只保留最新一条；组句联想、另一路翻译可继续返回。
+        self.pending_predictions.retain(|_, pending| {
+            pending.kind != PredictionKind::Translate || pending.scope != scope
+        });
         self.pending_predictions.insert(
             self.prediction_sequence,
             PendingPrediction {
                 kind: PredictionKind::Translate,
-                scope: String::new(),
+                scope: scope.to_owned(),
                 question_guess: String::new(),
             },
         );
@@ -255,10 +268,44 @@ impl Engine {
             .retain(|_, pending| pending.kind == PredictionKind::Translate);
     }
 
-    /// 作废当前整句候选翻译；候选变化、清空输入或关闭功能时调用。
+    /// 作废当前整句候选翻译；候选变化、清空输入或关闭功能时调用。不动暂存区那一路。
     pub fn cancel_sentence_translation(&mut self) {
-        self.pending_predictions
-            .retain(|_, pending| pending.kind != PredictionKind::Translate);
+        self.drop_translation("");
+    }
+
+    /// 作废暂存区译文，并让后台丢掉还没发出的那一条。已发出的结果靠序号丢弃。
+    pub fn cancel_staging_translation(&mut self) {
+        self.drop_translation(STAGING_TRANSLATION);
+        self.abandon_unsent_translation();
+    }
+
+    fn drop_translation(&mut self, scope: &str) {
+        self.pending_predictions.retain(|_, pending| {
+            pending.kind != PredictionKind::Translate || pending.scope != scope
+        });
+    }
+
+    /// 空译文请求：后台只清掉未发出的翻译，不访问网络，也不动组句联想。
+    fn abandon_unsent_translation(&mut self) {
+        if !self.predictor.is_enabled() {
+            return;
+        }
+        self.predictor.submit(PredictionRequest {
+            sequence: 0,
+            manual: true,
+            kind: PredictionKind::Translate,
+            before: String::new(),
+            after: String::new(),
+            pinyin: String::new(),
+            letters: String::new(),
+            syllables: 0,
+            candidates: Vec::new(),
+            guess: String::new(),
+            max_items: 0,
+            want_sentence: false,
+            text: String::new(),
+            target_language: String::new(),
+        });
     }
 
     /// 取回最近一次请求的结果；过期结果直接丢。没有就绪的结果返回 `None`，不阻塞。

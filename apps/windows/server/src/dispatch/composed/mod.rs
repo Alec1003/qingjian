@@ -10,6 +10,7 @@ use qingjian_core::{
 use qingjian_platform::protocol::{Frame, PROTOCOL_VERSION, PreeditKind, PreeditSegment};
 
 use self::sentence_translation::SentenceTranslation;
+pub(in crate::dispatch) use self::sentence_translation::StagingGloss;
 pub(super) use self::state::{Composed, TypedKeys};
 use super::Router;
 
@@ -28,10 +29,15 @@ impl Router {
         self.navigated = false;
         self.sentence = None;
         if self.engine.composition().is_empty() {
-            // 清空时也要撤掉 worker 中的待发请求，避免无用请求占掉最短间隔。
-            self.engine.cancel_prediction();
+            // 暂存区还在时只撤组句联想，译文继续等；都空了再整段取消。
+            if self.engine.has_staging() {
+                self.engine.cancel_composition_prediction();
+            } else {
+                self.engine.cancel_prediction();
+            }
             self.composed = None;
             self.stop_rescoring();
+            self.sync_staging_translation();
             return;
         }
         self.engine.cancel_composition_prediction();
@@ -49,6 +55,7 @@ impl Router {
                     self.engine.request_prediction(surrounding, layout.local());
                 }
                 let sentence_candidate = (self.config.sentence_translation
+                    && !self.staging_translation_wanted()
                     && self.engine.learning_language() != Language::Chinese)
                     .then(|| {
                         layout
@@ -70,7 +77,7 @@ impl Router {
                             SentenceTranslation::pending(candidate.text.clone(), sequence)
                         })
                 });
-                if sentence_translation.is_none() {
+                if sentence_translation.is_none() && !self.staging_translation_wanted() {
                     self.engine.cancel_sentence_translation();
                 }
                 Composed::Candidates {
@@ -90,6 +97,7 @@ impl Router {
             }
         });
         self.schedule_rescoring();
+        self.sync_staging_translation();
     }
 
     /// 拉一次云联想结果：云端词并进候选布局，整句补全记下；翻译评审时结果是译文。
@@ -111,6 +119,16 @@ impl Router {
                     tracing::info!("翻译选中文字：云端没有给出译文");
                     self.translation = None;
                 }
+            }
+            return;
+        }
+        if self
+            .staging_gloss
+            .as_ref()
+            .is_some_and(|gloss| gloss.sequence == prediction.sequence)
+        {
+            if let Some(gloss) = self.staging_gloss.as_mut() {
+                gloss.translation = prediction.sentence.filter(|text| !text.is_empty());
             }
             return;
         }
@@ -263,6 +281,7 @@ impl Router {
     pub(super) fn current_frame(&self) -> Frame {
         let mut frame = self.raw_frame();
         self.show_typed_keys(&mut frame);
+        self.hold_staging_composition(&mut frame);
         self.downgrade_for_old_dll(&mut frame);
         frame
     }
@@ -286,7 +305,34 @@ impl Router {
         frame.cursor = keys.cursor;
     }
 
-    /// 自绘候选窗用的帧：不做老 DLL 降级，码段照常画。
+    /// 拼音已经空、暂存区还有词时，把这些词放进发给 DLL 的拼音行。
+    /// 候选窗仍只按 [`Self::self_drawn_frame`] 画暂存区。输入框里留着这段组句，
+    /// 微信、Cursor 才会把回车交给输入法，而不是当成发送；候选窗也能跟着这段文字走，不会停在桌面上。
+    fn hold_staging_composition(&self, frame: &mut Frame) {
+        if !frame.preedit.iter().all(|segment| segment.text.is_empty()) || frame.staging.is_empty()
+        {
+            return;
+        }
+        let cursor = frame.staging_cursor.min(frame.staging.len());
+        let mut text = String::new();
+        let mut at = 0usize;
+        for (index, word) in frame.staging.iter().enumerate() {
+            if index == cursor {
+                at = text.chars().count();
+            }
+            text.push_str(word);
+        }
+        if cursor == frame.staging.len() {
+            at = text.chars().count();
+        }
+        frame.preedit = vec![PreeditSegment {
+            text,
+            kind: PreeditKind::Typed,
+        }];
+        frame.cursor = at;
+    }
+
+    /// 自绘候选窗用的帧：不做老 DLL 降级，码段照常画。暂存区不写进这里的拼音行，避免和暂存区画重。
     pub(super) fn self_drawn_frame(&self) -> Frame {
         self.raw_frame()
     }
@@ -325,7 +371,48 @@ impl Router {
         }
         let mut frame = self.composed_frame();
         frame.symbol_panel = self.panel_open();
+        frame.staging = self.engine.staging_words();
+        frame.staging_cursor = self.engine.staging_cursor();
+        frame.staging_translation = self
+            .staging_gloss
+            .as_ref()
+            .and_then(|gloss| gloss.translation.clone());
         frame
+    }
+
+    /// 暂存区有词、开关开着、学习语言不是中文时，译文走暂存区这一路。
+    fn staging_translation_wanted(&self) -> bool {
+        self.config.staging_translation
+            && self.engine.has_staging()
+            && self.engine.learning_language() != Language::Chinese
+    }
+
+    /// 暂存区整句变了就重发；没变就留着已经回来的译文。空了就取消还没发出的请求。
+    fn sync_staging_translation(&mut self) {
+        if !self.staging_translation_wanted() {
+            if self.staging_gloss.is_some() {
+                self.engine.cancel_staging_translation();
+                self.staging_gloss = None;
+            }
+            return;
+        }
+        let text = self.engine.staging_words().join("");
+        if self
+            .staging_gloss
+            .as_ref()
+            .is_some_and(|gloss| gloss.text == text)
+        {
+            return;
+        }
+        self.engine.cancel_staging_translation();
+        self.staging_gloss = self
+            .engine
+            .request_staging_translation(&text)
+            .map(|sequence| StagingGloss {
+                text,
+                sequence,
+                translation: None,
+            });
     }
 
     fn composed_frame(&self) -> Frame {
@@ -348,6 +435,9 @@ impl Router {
                 sentence: None,
                 notice: self.notice.clone(),
                 symbol_panel: false,
+                staging: Vec::new(),
+                staging_cursor: 0,
+                staging_translation: None,
             },
             Some(Composed::Candidates {
                 preedit,
@@ -380,6 +470,9 @@ impl Router {
                     sentence: self.sentence.clone(),
                     notice: self.notice.clone(),
                     symbol_panel: false,
+                    staging: Vec::new(),
+                    staging_cursor: 0,
+                    staging_translation: None,
                 }
             }
         }

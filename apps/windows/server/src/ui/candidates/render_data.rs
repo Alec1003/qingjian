@@ -71,8 +71,15 @@ impl RenderData {
         self.layout = frame.layout;
         self.appearance = frame.appearance;
         self.show_code = frame.aux_code_show;
-        self.preedit = window_preedit(frame);
-        self.cursor = frame.cursor;
+        let (preedit, cursor) = with_staging(
+            window_preedit(frame),
+            frame.cursor,
+            &frame.staging,
+            frame.staging_cursor,
+            frame.staging_translation.as_deref(),
+        );
+        self.preedit = preedit;
+        self.cursor = cursor;
         self.rows = frame
             .candidates
             .items
@@ -122,6 +129,63 @@ impl RenderData {
 
 /// 窗口顶部要画的拼音行：`[general] preedit` 配成「只在行内」时为空（拼音已经在应用里）；
 /// 整句补全仍画在这一行上，所以空行时窗口仍可能留出这条线。
+/// 暂存区画在拼音行前面。拼音还在时用 ▏ 标出下一词插入的位置，光标仍留在拼音上。
+fn with_staging(
+    pinyin: Vec<(String, PreeditKind)>,
+    pinyin_cursor: usize,
+    words: &[String],
+    cursor: usize,
+    translation: Option<&str>,
+) -> (Vec<(String, PreeditKind)>, usize) {
+    if words.is_empty() {
+        return (pinyin, pinyin_cursor);
+    }
+    let mut segments = Vec::new();
+    let mut seen = 0usize;
+    let mut caret = 0usize;
+    for (index, word) in words.iter().enumerate() {
+        if index == cursor {
+            caret = seen;
+            if !pinyin.is_empty() {
+                segments.push(("▏".to_owned(), PreeditKind::Typed));
+                seen += 1;
+            }
+        }
+        segments.push((word.clone(), PreeditKind::Typed));
+        seen += word.chars().count();
+    }
+    if cursor >= words.len() {
+        caret = seen;
+        if !pinyin.is_empty() {
+            segments.push(("▏".to_owned(), PreeditKind::Typed));
+            seen += 1;
+        }
+    }
+    if pinyin.is_empty() {
+        return with_translation(segments, caret, translation);
+    }
+    segments.push((" ".to_owned(), PreeditKind::Rest));
+    seen += 1;
+    segments.extend(pinyin);
+    with_translation(segments, seen + pinyin_cursor, translation)
+}
+
+/// 译文接在整行最后，不占光标。暂存区还空着时不画。
+fn with_translation(
+    mut segments: Vec<(String, PreeditKind)>,
+    caret: usize,
+    translation: Option<&str>,
+) -> (Vec<(String, PreeditKind)>, usize) {
+    if segments.is_empty() {
+        return (segments, caret);
+    }
+    if let Some(text) = translation.map(str::trim).filter(|text| !text.is_empty()) {
+        segments.push((" ".to_owned(), PreeditKind::Rest));
+        segments.push((text.to_owned(), PreeditKind::Rest));
+    }
+    (segments, caret)
+}
+
 fn window_preedit(frame: &Frame) -> Vec<(String, PreeditKind)> {
     if !frame.preedit_mode.in_window() {
         return Vec::new();

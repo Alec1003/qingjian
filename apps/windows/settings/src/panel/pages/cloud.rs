@@ -83,6 +83,13 @@ pub(crate) fn view(settings: &Settings, context: &mut ViewContext<Settings>) -> 
                 .on_toggled(context.callback(Message::CloudSentenceTranslation)),
         ),
         field(
+            "暂存区翻译",
+            "数字键进暂存区之后，停一下就把暂存的整句发给上面的服务。译文出现在候选窗里那一句旁边。句子变了就取消上一次，打字不用等。",
+            ToggleSwitch::new()
+                .is_on(p.staging_translation)
+                .on_toggled(context.callback(Message::CloudStagingTranslation)),
+        ),
+        field(
             "接口地址",
             "",
             TextBox::new()

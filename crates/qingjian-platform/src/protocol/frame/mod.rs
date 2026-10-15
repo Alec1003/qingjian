@@ -11,7 +11,7 @@ use qingjian_core::CandidateList;
 use crate::{Appearance, LayoutMode, PreeditMode};
 
 /// Server 告诉 DLL「现在屏幕上该是什么样」：组句的拼音行、候选页、高亮与页码。
-/// 空 [`Frame`]（`preedit` 与 `candidates` 都空）表示没有在组句，DLL 收起候选窗口。
+/// 空 [`Frame`]（拼音、候选、暂存区都空，符号面板也没开）表示没有在组句，DLL 收起候选窗口。
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Frame {
     /// 组句拼音行的分段，按顺序拼成整行。
@@ -62,11 +62,26 @@ pub struct Frame {
     /// 面板由 Server 自绘，这一帧的候选不画。
     #[serde(default)]
     pub symbol_panel: bool,
+
+    /// 暂存区里的词，按顺序。还没写入应用。
+    #[serde(default)]
+    pub staging: Vec<String>,
+
+    /// 暂存区插入位置，0 到 [`staging`](Self::staging) 的长度。
+    #[serde(default)]
+    pub staging_cursor: usize,
+
+    /// 暂存区整句的译文。还没回来是 `None`。不单独撑开组句。
+    #[serde(default)]
+    pub staging_translation: Option<String>,
 }
 
 impl Frame {
     /// 没有在组句：DLL 据此收起候选窗口。提示不算数（见 [`notice`](Self::notice)），开着的符号面板算。
     pub fn is_empty(&self) -> bool {
-        self.preedit.is_empty() && self.candidates.items.is_empty() && !self.symbol_panel
+        self.preedit.is_empty()
+            && self.candidates.items.is_empty()
+            && self.staging.is_empty()
+            && !self.symbol_panel
     }
 }

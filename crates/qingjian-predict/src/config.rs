@@ -47,6 +47,9 @@ pub struct PredictConfig {
     /// 给本地整句候选自动请求译文，并显示在候选右侧。
     pub sentence_translation: bool,
 
+    /// 给暂存区里的整句自动请求译文，显示在候选窗的暂存文字旁边。只发这一句。
+    pub staging_translation: bool,
+
     /// 推理强度，随请求发 `reasoning_effort`：`none` 关掉模型的思考（联想要的是快，不是想），
     /// 其余 minimal / low / medium / high / xhigh 照传；留空则不发（给不认这个参数的接口）。
     /// DeepSeek V4 这类默认带思考的模型不关会把 token 预算全花在思考上，正文为空。
@@ -70,6 +73,7 @@ impl Default for PredictConfig {
             slots: 2,
             sentence: true,
             sentence_translation: false,
+            staging_translation: false,
             reasoning_effort: "none".to_owned(),
         }
     }

@@ -113,6 +113,9 @@ impl Router {
             sentence: None,
             notice: None,
             symbol_panel: false,
+            staging: Vec::new(),
+            staging_cursor: 0,
+            staging_translation: None,
         }
     }
 }

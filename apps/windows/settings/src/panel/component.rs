@@ -85,6 +85,7 @@ impl Component for Settings {
             Message::PunctCommits(on) => {
                 self.save("general", "punct_commits", on);
             }
+            Message::Staging(on) => self.save("general", "staging", on),
             Message::EnglishOnlyInApps(on) => {
                 let list: Vec<String> = if on {
                     DEFAULT_ENGLISH_CANDIDATES_ON_WINDOWS
@@ -179,6 +180,9 @@ impl Component for Settings {
             Message::CloudSentence(on) => self.save("predict", "sentence", on),
             Message::CloudSentenceTranslation(on) => {
                 self.save("predict", "sentence_translation", on)
+            }
+            Message::CloudStagingTranslation(on) => {
+                self.save("predict", "staging_translation", on)
             }
             Message::TestConnection => {
                 if matches!(self.cloud_status, CloudStatus::Testing) {

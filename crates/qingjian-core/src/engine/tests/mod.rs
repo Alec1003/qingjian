@@ -15,6 +15,7 @@ mod privacy;
 mod raw;
 mod shuangpin;
 mod spacing;
+mod staging;
 mod zhuyin;
 
 use std::collections::HashMap;
