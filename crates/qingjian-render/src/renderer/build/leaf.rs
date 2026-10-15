@@ -1,13 +1,13 @@
 //! 叶子节点：文字、图标、拼音行、译文。绑定取不到数据时不产出节点。
 
-use taffy::{AlignItems, Dimension, NodeId, Style};
+use bamboo_slip::taffy::{AlignItems, Dimension, NodeId, Style};
 
 use super::layout_style;
 use super::{Builder, Context};
-use crate::error::RenderError;
 use crate::frame::{Preedit, PreeditStyle, Tone};
-use crate::scene::Visual;
 use crate::theme::file::node::{BoxSpec, Direction, NodeKind, NodeSpec, ToneFilter};
+use bamboo_slip::RenderError;
+use bamboo_slip::{Decoration, Visual};
 
 impl Builder<'_> {
     pub(super) fn leaf(
@@ -51,7 +51,7 @@ impl Builder<'_> {
                     style.size.height = Dimension::length(size);
                 }
                 let visual = Visual::Icon {
-                    icon: *icon,
+                    icon: icon.painter(),
                     size,
                     color: self.color(color, ctx),
                 };
@@ -167,11 +167,11 @@ impl Builder<'_> {
                 PreeditStyle::Typed => typed_style,
                 PreeditStyle::Rest => rest_style,
                 // 辅码码段：与剩余拼音同色，再压一道下划线区分
-                PreeditStyle::AuxCode => rest_style.underlined(),
+                PreeditStyle::AuxCode => rest_style.decorated(Decoration::Underline),
                 PreeditStyle::Struck => self
                     .text_style(font, self.color(struck, ctx))
                     .stroked(stroke)
-                    .struck(),
+                    .decorated(Decoration::Strikethrough),
                 PreeditStyle::Staging => staging_style,
             };
             let chars = segment.text.chars().count();
@@ -200,7 +200,7 @@ impl Builder<'_> {
         }
         let caret_width = caret.width * self.scale;
         let spacer = Style {
-            size: taffy::Size {
+            size: bamboo_slip::taffy::Size {
                 width: Dimension::length(caret_width),
                 height: Dimension::length(0.0),
             },
@@ -211,14 +211,14 @@ impl Builder<'_> {
         // 暂存的词比旁边的译文大，译文在行里垂直居中。
         row.align_items = Some(AlignItems::CENTER);
         let caret_style = Style {
-            position: taffy::Position::Absolute,
-            inset: taffy::Rect {
-                left: taffy::LengthPercentageAuto::length(caret_x),
-                right: taffy::LengthPercentageAuto::auto(),
-                top: taffy::LengthPercentageAuto::length(0.0),
-                bottom: taffy::LengthPercentageAuto::auto(),
+            position: bamboo_slip::taffy::Position::Absolute,
+            inset: bamboo_slip::taffy::Rect {
+                left: bamboo_slip::taffy::LengthPercentageAuto::length(caret_x),
+                right: bamboo_slip::taffy::LengthPercentageAuto::auto(),
+                top: bamboo_slip::taffy::LengthPercentageAuto::length(0.0),
+                bottom: bamboo_slip::taffy::LengthPercentageAuto::auto(),
             },
-            size: taffy::Size {
+            size: bamboo_slip::taffy::Size {
                 width: Dimension::length(caret_width),
                 height: Dimension::length(caret_height),
             },
