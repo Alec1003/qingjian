@@ -1,3 +1,4 @@
+use qingjian_core::TraditionalVariant;
 use qingjian_platform::protocol::KeyModifiers;
 use qingjian_platform::{
     Appearance, AppsConfig, CandidateRenderer, Config, FontSize, HighlightKeys, KeyCombo,
@@ -126,7 +127,7 @@ pub struct RouterConfig {
     /// 形码侧开没开（`[general] wubi`）。与拼音同时开着就是混输。
     pub wubi: bool,
 
-    /// 繁体输出（`[general] traditional`），给候选窗口主题显示简 / 繁。
+    /// 繁体输出（`[general] traditional_variant`），给候选窗口主题显示简 / 繁。
     pub traditional: bool,
 
     /// 辅码触发键（`[general] aux_code_key`，缺省 `;`）；非法值退回缺省。
@@ -202,7 +203,7 @@ impl From<&Config> for RouterConfig {
             status_pos: config.status_bar.x.zip(config.status_bar.y),
             scheme: config.general.scheme(),
             wubi: config.general.wubi(),
-            traditional: config.general.traditional,
+            traditional: config.general.traditional() != TraditionalVariant::Off,
             aux_code_key: config.general.aux_code_key(),
             aux_code_show: config.general.aux_code_show,
         }

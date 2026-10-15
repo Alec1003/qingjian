@@ -76,6 +76,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     engine.set_emoji_limit(usize::from(config.general.emoji.get()));
     engine.set_kaomoji_limit(usize::from(config.general.kaomoji.get()));
     engine.set_symbol_limit(usize::from(config.general.symbols.get()));
+    engine.set_traditional(config.general.traditional());
     engine.set_english_in_chinese(config.general.english_in_chinese);
     engine.set_mode_keys(config.shortcut.mode);
     engine

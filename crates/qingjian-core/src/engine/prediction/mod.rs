@@ -335,23 +335,14 @@ impl Engine {
                         });
                     }
                 }
-                if self.traditional
-                    && pending.kind != PredictionKind::Translate
-                    && let Some(opencc) = &self.opencc
-                {
+                // 云端词与整句不走候选列表，赶不上 query 那边的 apply，这里单独转并记还原表。
+                // 释义那一类不转：它出来的是中文释义，简繁在挂到候选上时才处理
+                if pending.kind != PredictionKind::Translate {
                     for word in &mut prediction.words {
-                        let traditional = opencc.convert(&word.text);
-                        self.traditional_map
-                            .borrow_mut()
-                            .insert(traditional.clone(), word.text.clone());
-                        word.text = traditional;
+                        word.text = self.traditional.convert_remember(&word.text);
                     }
                     if let Some(sentence) = &mut prediction.sentence {
-                        let traditional = opencc.convert(sentence);
-                        self.traditional_map
-                            .borrow_mut()
-                            .insert(traditional.clone(), sentence.clone());
-                        *sentence = traditional;
+                        *sentence = self.traditional.convert_remember(sentence);
                     }
                 }
                 return Some(prediction);
@@ -390,19 +381,10 @@ impl Engine {
     /// 但按语言模型把它切成词（[`sentence::segment_text`]）逐条记进个人 n-gram，与选整句候选一样；
     /// 标点处断句，句尾是标点时之后的词按句首记。整句退格删光再重打时这些转移一并退回。
     pub fn accept_prediction(&mut self, text: &str) -> String {
+        // 壳送回来的是繁体那份：先换回简体，下面的学习、日志、n-gram 一律看简体
         let traditional_text = text.to_owned();
-        let original_text_owned;
-        let text = if self.traditional {
-            original_text_owned = self
-                .traditional_map
-                .borrow()
-                .get(text)
-                .cloned()
-                .unwrap_or_else(|| text.to_owned());
-            &original_text_owned
-        } else {
-            text
-        };
+        let restored = self.traditional.restore(text);
+        let text = restored.as_deref().unwrap_or(text);
         let (_, input) = self.whole_scope();
         self.apply_retraction(&input, text);
         self.recording.clear();

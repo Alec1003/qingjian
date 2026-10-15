@@ -7,7 +7,7 @@ use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject, Sel};
 use objc2::{define_class, msg_send, sel};
 use objc2_app_kit::{NSEvent, NSEventModifierFlags, NSEventType, NSMenu};
-use objc2_foundation::NSObjectProtocol;
+use objc2_foundation::{NSObjectProtocol, NSString};
 use objc2_input_method_kit::{IMKInputController, IMKServer};
 use qingjian_core::{Candidate, QUESTION_PREFIX};
 use qingjian_platform::Modifiers;
@@ -95,6 +95,15 @@ define_class!(
             tracing::info!("activateServer");
             self.set_active();
             let done = catch_panic("activateServer", || {
+                // 会话级把键盘布局覆盖为 ABC（QWERTY）：系统会沿用「上一次使用的拉丁键盘布局」，
+                // 从德语 QWERTZ 等布局切入时 z/y 互换（#577）。这是 IMKTextInput 协议方法，
+                // 只作用于本输入法收到的按键事件，不改用户的全局布局；objc2-input-method-kit
+                // 未生成该协议绑定，与 TextClient 一样用裸 msg_send!。
+                if let Some(sender) = sender {
+                    let layout = NSString::from_str("com.apple.keylayout.ABC");
+                    let _: () =
+                        unsafe { msg_send![sender, overrideKeyboardWithKeyboardNamed: &*layout] };
+                }
                 // 用户要往 [apps] 里加应用时，从这条日志抄 bundle identifier
                 let bundle = sender.and_then(|s| TextClient::new(s).bundle_identifier());
                 if let Some(bundle) = &bundle {

@@ -21,3 +21,22 @@
   （16/22/24/32/48/64/128/256）。`linux/render-icons.sh` 从 `logo.png` 等比栅格化（需要 magick），生成物随仓库提交，
   源码安装与预编译包都不带栅格化依赖；`apps/linux/scripts/files.py` 安装时按目录尺寸逐档拷到 `$XDG_DATA_HOME/icons/hicolor/`。
   改了源图重跑脚本；不要把 1024px 源图直接放进尺寸目录，不做缩放的托盘（如 Waybar）会显示成巨图。
+
+## Linux 发行版打包
+
+八档 PNG 已栅格化并随仓库提交，打包时不需要 ImageMagick，逐档装进系统 hicolor 主题即可，文件名保持 `qingjian.png`：
+
+```sh
+for size in 16 22 24 32 48 64 128 256; do
+  install -Dm644 "assets/icon/linux/hicolor/${size}x${size}/apps/qingjian.png" \
+    "${pkgdir}/usr/share/icons/hicolor/${size}x${size}/apps/qingjian.png"
+done
+```
+
+- 目录名的名义尺寸必须与 PNG 实际像素一致：不要把 1024px 的 `logo.png` 塞进某个尺寸目录，也不要只装最大一档，
+  否则不做缩放的托盘（如 Waybar）会显示成巨图，或找不到 16px 小图标（#547）。
+- 装进 `/usr/share/qingjian/resources/assets/` 的那份是程序资源副本，图标主题不读这个路径，不能拿它代替 hicolor 安装。
+- 多数发行版的 `gtk-update-icon-cache` hook（或 file trigger）会自动刷新缓存；没有的话在打包安装钩子中执行
+  `gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor`。
+
+源码安装与官方预编译包走 `apps/linux/scripts/files.py`，装到 `$XDG_DATA_HOME/icons/hicolor/`（用户目录）；系统级发行版包不要复用该路径，应装 `/usr/share/icons/hicolor/`。

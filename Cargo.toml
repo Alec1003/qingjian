@@ -54,7 +54,8 @@ jiff = "0.2.35"
 plist = "1.7"
 # 热路径上的字符串键哈希表（词频 / 语言模型 / 个人 n-gram）：SipHash 一次查表几十纳秒，单字母简拼一键要查几万次
 foldhash = "0.2.0"
-# 繁体输出（OpenCC s2tw，内置词表）；只要简→繁那半
+# 简繁转换（OpenCC 的纯 Rust 实现，Apache-2.0）：字典在编译期编进产物，运行时不读外部文件。
+# 只要简 → 繁，反向的 t2s 用不上
 ferrous-opencc = { version = "0.4.0", default-features = false, features = ["s2t-conversion"] }
 # .qj 数据容器：mmap 打开、结构体数组零拷贝读取
 memmap2 = "0.9"

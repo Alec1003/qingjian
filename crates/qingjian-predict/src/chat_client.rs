@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::LazyLock;
 use std::time::Duration;
 
@@ -15,6 +16,7 @@ use reqwest::header::{HeaderMap, HeaderValue};
 use crate::config::PredictConfig;
 use crate::error::PredictError;
 use crate::prompt::{self, Reply};
+use crate::usage::ApiUsageStats;
 
 /// 联想回复的 token 上限：几条短句足够，防止模型长篇大论。
 const MAX_TOKENS: u32 = 200;
@@ -46,6 +48,9 @@ pub struct ChatClient {
 
     /// 接口关思考用的是哪种参数（按接口地址定）。
     thinking_switch: ThinkingSwitch,
+
+    /// 壳选择累计用量的本机文件；None 时保持原有无统计行为。
+    usage_path: Option<PathBuf>,
 }
 
 impl ChatClient {
@@ -60,7 +65,13 @@ impl ChatClient {
             timeout: Duration::from_millis(config.timeout_ms),
             reasoning_effort: parse_reasoning_effort(&config.reasoning_effort),
             thinking_switch: ThinkingSwitch::for_url(&config.base_url),
+            usage_path: None,
         }
+    }
+
+    pub fn with_usage(mut self, path: Option<PathBuf>) -> Self {
+        self.usage_path = path;
+        self
     }
 
     pub async fn complete(&self, request: &PredictionRequest) -> Result<Reply, PredictError> {
@@ -123,10 +134,18 @@ impl ChatClient {
 
     /// 发一次请求，返回原始 JSON。
     async fn send(&self, body: &serde_json::Value) -> Result<serde_json::Value, PredictError> {
-        tokio::time::timeout(self.timeout, self.client.chat().create_byot(body.clone()))
-            .await
-            .map_err(|_| PredictError::Timeout(self.timeout.as_millis() as u64))?
-            .map_err(PredictError::from)
+        if let Some(path) = &self.usage_path {
+            ApiUsageStats::record_request(path);
+        }
+        let response =
+            tokio::time::timeout(self.timeout, self.client.chat().create_byot(body.clone()))
+                .await
+                .map_err(|_| PredictError::Timeout(self.timeout.as_millis() as u64))
+                .and_then(|result| result.map_err(PredictError::from));
+        if let Some(path) = &self.usage_path {
+            ApiUsageStats::record_response(path, response.as_ref().ok());
+        }
+        response
     }
 
     /// 从原始响应里取正文；空正文时把原始响应记进日志，方便排查思考占满预算、模型名不对这类问题。

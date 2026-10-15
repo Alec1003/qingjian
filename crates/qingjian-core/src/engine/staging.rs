@@ -198,10 +198,8 @@ impl Engine {
     /// 记学习用的候选。繁体输出时词频仍按简体记。
     fn staged_candidate(&self, candidate: &Candidate) -> Candidate {
         let mut learned = candidate.clone();
-        if self.traditional
-            && let Some(simplified) = self.traditional_map.borrow().get(&learned.text)
-        {
-            learned.text = simplified.clone();
+        if let Some(simplified) = self.traditional.restore(&learned.text) {
+            learned.text = simplified;
         }
         learned
     }

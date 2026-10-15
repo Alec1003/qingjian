@@ -494,7 +494,7 @@ fn traditional_mode_preserves_original_text_across_queries() {
         }))
         .with_learner(Box::new(WordLearner::default()));
 
-    engine.set_traditional_mode(true);
+    engine.set_traditional(crate::TraditionalVariant::Taiwan);
     engine.set_input("kaifa");
     engine.request_prediction(None, &[]);
     let prediction = engine.poll_prediction().unwrap();

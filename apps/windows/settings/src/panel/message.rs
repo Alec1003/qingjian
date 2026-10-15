@@ -12,7 +12,7 @@ pub(crate) enum Message {
     Scheme(Option<usize>),
     ShuangpinRawPreedit(bool),
     Wubi(bool),
-    Traditional(bool),
+    Traditional(Option<usize>),
     Emoji(Option<usize>),
     Kaomoji(Option<usize>),
     Symbols(Option<usize>),

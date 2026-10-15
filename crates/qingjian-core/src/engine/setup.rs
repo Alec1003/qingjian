@@ -15,6 +15,7 @@ use crate::fuzzy::FuzzyRules;
 use crate::history::InputHistory;
 use crate::sentence::{Interpolation, LanguageModel, Personal, SentenceScorer};
 use crate::shuangpin::Scheme;
+use crate::traditional::{Traditional, TraditionalVariant};
 use qingjian_dictionary::{AuxCodeLookup, CodeTable, Dictionary, WordList};
 use std::sync::Arc;
 
@@ -103,20 +104,22 @@ impl Engine {
         self.forget_span_cache();
     }
 
-    /// 設置是否啟用繁體輸出模式。
-    pub fn set_traditional_mode(&mut self, on: bool) {
-        self.traditional = on;
-        if on && self.opencc.is_none() {
-            match ferrous_opencc::OpenCC::from_config(ferrous_opencc::config::BuiltinConfig::S2tw) {
-                Ok(opencc) => self.opencc = Some(opencc),
-                Err(error) => tracing::warn!(%error, "繁体转换器初始化失败，候选仍是简体"),
-            }
-        }
-    }
-
     /// 目前是否處於注音模式。
     pub fn is_zhuyin_mode(&self) -> bool {
         self.zhuyin
+    }
+
+    /// 设繁体输出：候选与上屏文本在出 Core 时换成繁体，词库与学习数据仍是简体（见 [`crate::traditional`]）。
+    /// 变体没变就不重建，建一次要把 OpenCC 的字典装起来。
+    pub fn set_traditional(&mut self, variant: TraditionalVariant) {
+        if variant != self.traditional.variant() {
+            self.traditional = Traditional::new(variant);
+        }
+    }
+
+    /// 当前的繁体输出变体。
+    pub fn traditional(&self) -> TraditionalVariant {
+        self.traditional.variant()
     }
 
     /// 换形码码表（五笔），`None` 回到拼音的诸方案。编码与拼音是两套键，纠错缓存一并清掉。

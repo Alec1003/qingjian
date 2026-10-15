@@ -9,6 +9,7 @@ pub use translation_job::TranslationJob;
 
 use super::cloud::cloud_candidate;
 use super::*;
+use qingjian_core::TraditionalVariant;
 
 impl Host {
     /// 删掉当前页第 `offset` 格的候选：用户词整个删、词库词清学习。返回给用户看的一句话；那格没有候选返回 `None`。
@@ -163,7 +164,7 @@ impl Host {
         let english = crate::imk::modifiers::caps_lock_on();
         qingjian_render::Mode {
             english,
-            traditional: general.traditional,
+            traditional: general.traditional() != TraditionalVariant::Off,
             full_width: !english && general.full_width_punctuation,
             scheme: qingjian_platform::scheme_name(general.scheme(), general.wubi()),
         }

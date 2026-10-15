@@ -206,6 +206,23 @@ mod tests {
     }
 
     #[test]
+    fn v_stands_for_u_umlaut_after_jqxy_with_finals() {
+        // #531：j/q/x/y 后 v 代 ü 的韵母系列要整体切成一个完整音节，
+        // 不能像修复前那样拆成 jv+e。切分文本保留用户敲法（与 lue/lve 一致），
+        // 查词时经 canonical_syllable 归一到主写法，故这里断言「不拆、无残片」。
+        assert_eq!(joined("jve")[0], "jve");
+        assert_eq!(joined("qve")[0], "qve");
+        assert_eq!(joined("xve")[0], "xve");
+        assert_eq!(joined("yve")[0], "yve");
+        assert_eq!(joined("jvan")[0], "jvan");
+        assert_eq!(joined("yvn")[0], "yvn");
+        // 多音节边界：jve 后接 de 时不在 jv/e 之间错切
+        assert_eq!(joined("jvede")[0], "jve de");
+        // 整串可完整切分（无残片）
+        assert!(is_fully_segmentable("jvexvejvan"));
+    }
+
+    #[test]
     fn apostrophe_forces_boundary() {
         let all = joined("xi'an");
         assert_eq!(all[0], "xi an");

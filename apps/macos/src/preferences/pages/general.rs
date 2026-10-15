@@ -3,7 +3,7 @@
 use objc2::MainThreadMarker;
 use objc2::rc::Retained;
 use objc2_app_kit::{NSButton, NSPopUpButton};
-use qingjian_core::Language;
+use qingjian_core::{Language, TraditionalVariant};
 use qingjian_platform::{Config, EmojiCount, MAX_PAGE_SIZE, Scheme};
 
 use crate::preferences::controls::{
@@ -28,8 +28,8 @@ pub struct GeneralPage {
     /// 五笔（86 版形码）；与拼音方案同时开着就是混输。
     wubi: Retained<NSButton>,
 
-    /// 繁体输出模式。
-    traditional: Retained<NSButton>,
+    /// 输出字形（第 0 项是简体）。
+    traditional: Retained<NSPopUpButton>,
 
     /// 候选后面一次最多配几个 emoji。
     emoji: Retained<NSPopUpButton>,
@@ -135,6 +135,23 @@ impl GeneralPage {
             mtm,
             "与拼音方案同时开着就是混输：编码打全的五笔词在前，打不出的字直接打拼音。单用五笔请把拼音方案关掉；第 5 个字母起五笔查不到东西，自动只剩拼音。",
         );
+        let traditional_titles: Vec<String> = TraditionalVariant::ALL
+            .iter()
+            .map(|variant| variant.label().to_owned())
+            .collect();
+        let traditional = row_popup(
+            layout,
+            mtm,
+            "输出字形",
+            &traditional_titles,
+            Setting::Traditional,
+            target,
+        );
+        note(
+            layout,
+            mtm,
+            "只换字形、不换用语（软件 → 軟件）；台湾与香港的字形取舍不同（裡 / 裏）。词库与学习数据始终是简体，改回简体后学过的词照样在。",
+        );
         let punctuation = row_popup(
             layout,
             mtm,
@@ -155,8 +172,6 @@ impl GeneralPage {
             mtm,
             "打拼音时敲 , . ? ! 等先把高亮候选上屏、再补该标点（nihao, 一气打完「你好，」）；不勾恢复老行为：标点进英文直输段。",
         );
-        let traditional = checkbox(mtm, "繁体输出", Setting::Traditional, target);
-        row_checkbox(layout, &traditional);
         let emoji_titles: Vec<String> = EmojiCount::LABELS.iter().map(|&s| s.to_owned()).collect();
         let emoji = row_popup(
             layout,
@@ -302,7 +317,12 @@ impl GeneralPage {
         set_checked(&self.shuangpin_raw_preedit, general.shuangpin_raw_preedit);
         self.shuangpin_raw_preedit
             .setEnabled(general.scheme().is_shuangpin());
-        set_checked(&self.traditional, general.traditional);
+        select(
+            &self.traditional,
+            TraditionalVariant::ALL
+                .iter()
+                .position(|variant| *variant == general.traditional()),
+        );
         select(&self.emoji, Some(usize::from(general.emoji.get())));
         select(&self.kaomoji, Some(usize::from(general.kaomoji.get())));
         select(&self.symbols, Some(usize::from(general.symbols.get())));

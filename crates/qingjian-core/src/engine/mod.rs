@@ -80,6 +80,7 @@ use crate::sentence::{
 };
 use crate::shortcut;
 use crate::shuangpin::Scheme;
+use crate::traditional::Traditional;
 
 use commit::CommitChain;
 
@@ -307,14 +308,8 @@ pub struct Engine {
     /// 辅码码表，壳按用户目录 `codes/` 与配置装配；空表示没装码表（辅码态筛不出任何词）。
     aux_codes: Vec<Arc<dyn AuxCodeLookup>>,
 
-    /// 繁体输出模式。
-    traditional: bool,
-
-    /// 繁体转换器。
-    opencc: Option<ferrous_opencc::OpenCC>,
-
-    /// 繁体输出时「繁体 → 原简体」的映射，组句结束清空；学习、译词、撤销都按简体原文走。
-    traditional_map: std::cell::RefCell<HashMap<String, String>>,
+    /// 繁体输出：候选出 Core 时换成繁体、上屏时换回简体，缺省不转（见 [`crate::traditional`]）。
+    traditional: Traditional,
 }
 
 /// 形码编码最长几位（五笔四码）：混输下超过它的输入只可能是拼音。
@@ -485,9 +480,7 @@ impl Engine {
             aux_code_key: DEFAULT_AUX_CODE_KEY,
             aux_keep_empty: true,
             aux_codes: Vec::new(),
-            traditional: false,
-            opencc: None,
-            traditional_map: std::cell::RefCell::new(HashMap::new()),
+            traditional: Traditional::default(),
         }
     }
 }

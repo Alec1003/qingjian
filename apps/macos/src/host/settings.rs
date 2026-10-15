@@ -3,6 +3,7 @@
 use super::diagnostics::{copy_to_pasteboard, open_with_system};
 use super::*;
 use crate::preferences::DEFAULT_FONT_LABEL;
+use qingjian_core::TraditionalVariant;
 use qingjian_platform::{FontSize, ShiftLetter};
 
 impl Host {
@@ -377,9 +378,6 @@ impl Host {
             (Setting::CloudSlots, SettingValue::Index(index)) => {
                 self.settings.set_value("predict", "slots", index as i64);
             }
-            (Setting::Traditional, SettingValue::Bool(on)) => {
-                self.settings.set_bool("general", "traditional", on);
-            }
             (Setting::EnglishCandidates, SettingValue::Bool(on)) => {
                 self.settings.set_bool("general", "english_candidates", on);
             }
@@ -436,6 +434,15 @@ impl Host {
             (Setting::Wubi, SettingValue::Bool(on)) => {
                 self.settings
                     .set_value("general", "wubi", if on { "wubi86" } else { "" });
+            }
+            // 弹出菜单按 TraditionalVariant::ALL 的顺序，第 0 项是简体
+            (Setting::Traditional, SettingValue::Index(index)) => {
+                let key = TraditionalVariant::ALL
+                    .get(index)
+                    .unwrap_or(&TraditionalVariant::Off)
+                    .key();
+                self.settings
+                    .set_value("general", "traditional_variant", key);
             }
             // 文本框失焦也会发 action：值没变就不写，免得每次切窗口都重写一遍配置
             (Setting::BaseUrl, SettingValue::Text(text)) => {

@@ -22,6 +22,7 @@ pub mod shortcut;
 pub mod shuangpin;
 pub mod spacing;
 pub mod storage;
+pub mod traditional;
 pub mod zhuyin;
 
 pub use custom_phrase::CustomPhrase;
@@ -50,3 +51,4 @@ pub use parser::{ParseError, Segmentation};
 pub use punctuation::Punctuation;
 pub use qingjian_dictionary as dictionary;
 pub use shuangpin::Scheme as ShuangpinScheme;
+pub use traditional::{Traditional, TraditionalVariant};

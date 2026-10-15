@@ -12,7 +12,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use qingjian_core::{Engine, Language, NoGlossFiller, NoPredictor, NoTranslator};
 use qingjian_platform::{Config, code_tables};
-use qingjian_predict::{CloudGlossFiller, CloudPredictor, PredictConfig};
+use qingjian_predict::{API_USAGE_FILE, CloudGlossFiller, CloudPredictor, PredictConfig};
 
 pub(super) use self::state::ConfigReload;
 pub use self::state::DataDirs;
@@ -32,14 +32,14 @@ fn mtime(path: &Path) -> Option<SystemTime> {
 }
 
 /// 按 `[predict]` 接云联想、整句候选翻译与释义兜底；关着或缺密钥就退回本地实现。启动与热加载共用。
-pub fn attach_cloud(engine: &mut Engine, predict: &PredictConfig) {
+pub fn attach_cloud(engine: &mut Engine, predict: &PredictConfig, usage_path: Option<PathBuf>) {
     if !predict.enabled && !predict.sentence_translation && !predict.staging_translation {
         tracing::info!("云联想未开启（[predict] enabled = false）");
         engine.set_predictor(Box::new(NoPredictor));
         engine.set_gloss_filler(Box::new(NoGlossFiller));
         return;
     }
-    match CloudPredictor::new(predict) {
+    match CloudPredictor::new_with_usage(predict, usage_path.clone()) {
         Ok(predictor) => {
             engine.set_predictor(Box::new(predictor));
             tracing::info!(model = %predict.model, cloud = predict.enabled, sentence_translation = predict.sentence_translation, staging_translation = predict.staging_translation, "云联想已接入");
@@ -50,7 +50,7 @@ pub fn attach_cloud(engine: &mut Engine, predict: &PredictConfig) {
         }
     }
     if predict.enabled {
-        match CloudGlossFiller::new(predict) {
+        match CloudGlossFiller::new_with_usage(predict, usage_path) {
             Ok(filler) => engine.set_gloss_filler(Box::new(filler)),
             Err(error) => {
                 tracing::warn!(%error, "释义兜底未启用");
@@ -219,7 +219,7 @@ impl Router {
         }
         // 拼音侧与形码侧一起装配（双拼 / 注音 / 混输都在里面）
         self.reload_code_table(config.general.scheme(), config.general.wubi());
-        self.engine.set_traditional_mode(config.general.traditional);
+        self.engine.set_traditional(config.general.traditional());
         self.engine.set_learning(config.general.learning);
         self.engine.set_mode_keys(config.shortcut.mode);
         self.engine
@@ -259,7 +259,12 @@ impl Router {
         };
         reload.update = config.update.clone();
         if config.predict != reload.applied_predict {
-            attach_cloud(&mut self.engine, &config.predict);
+            let usage_path = reload
+                .dirs
+                .user_root
+                .as_ref()
+                .map(|dir| dir.join(API_USAGE_FILE));
+            attach_cloud(&mut self.engine, &config.predict, usage_path);
             reload.applied_predict = config.predict.clone();
         }
         let language = assembly::learning_language(config);
