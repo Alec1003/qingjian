@@ -215,6 +215,30 @@ fn digit_stages_until_enter_when_staging_is_on() {
 }
 
 #[test]
+fn staged_words_stay_in_the_app_while_the_next_pinyin_is_typed() {
+    let mut router = router_with(RouterConfig {
+        staging: true,
+        ..RouterConfig::default()
+    });
+    let (_, _, frame) = type_letters(&mut router, "nihao");
+    let position = frame
+        .candidates
+        .items
+        .iter()
+        .position(|candidate| candidate.text == "你好")
+        .expect("「你好」在候选页内");
+    press(&mut router, digit(position as u32 + 1));
+
+    let (_, _, after) = type_letters(&mut router, "yi");
+    assert_eq!(after.staging, vec!["你好".to_owned()]);
+    assert!(
+        preedit(&after).starts_with("你好"),
+        "接着打拼音时，已暂存的词仍留在输入框里，实际 preedit={}",
+        preedit(&after)
+    );
+}
+
+#[test]
 fn staging_sentence_is_translated_without_blocking_input() {
     let submitted = Arc::new(Mutex::new(Vec::new()));
     let mut router = router_with(RouterConfig {

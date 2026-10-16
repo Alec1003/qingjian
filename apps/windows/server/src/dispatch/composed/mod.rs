@@ -307,28 +307,41 @@ impl Router {
         frame.cursor = keys.cursor;
     }
 
-    /// 拼音已经空、暂存区还有词时，把这些词放进发给 DLL 的拼音行。
-    /// 候选窗仍只按 [`Self::self_drawn_frame`] 画暂存区。输入框里留着这段组句，
-    /// 微信、Cursor 才会把回车交给输入法，而不是当成发送；候选窗也能跟着这段文字走，不会停在桌面上。
+    /// 暂存区还有词时，把这些词放进发给 DLL 的拼音行，排在还在敲的拼音前面。
+    /// 候选窗仍只按 [`Self::self_drawn_frame`] 画暂存区，不把这段再写进窗口的拼音行。
+    /// 输入框里留着这段组句，接着打下一个词时已经选过的字还在；微信、Cursor 也会把回车交给输入法，而不是当成发送。
     fn hold_staging_composition(&self, frame: &mut Frame) {
-        if !frame.preedit.iter().all(|segment| segment.text.is_empty()) || frame.staging.is_empty()
-        {
+        if frame.staging.is_empty() {
+            return;
+        }
+        let staged: String = frame.staging.iter().map(String::as_str).collect();
+        let pinyin_empty = frame.preedit.iter().all(|segment| segment.text.is_empty());
+        if !pinyin_empty {
+            let shift = staged.chars().count();
+            frame.preedit.insert(
+                0,
+                PreeditSegment {
+                    text: staged,
+                    kind: PreeditKind::Typed,
+                },
+            );
+            frame.cursor += shift;
             return;
         }
         let cursor = frame.staging_cursor.min(frame.staging.len());
-        let mut text = String::new();
         let mut at = 0usize;
+        let mut seen = 0usize;
         for (index, word) in frame.staging.iter().enumerate() {
             if index == cursor {
-                at = text.chars().count();
+                at = seen;
             }
-            text.push_str(word);
+            seen += word.chars().count();
         }
         if cursor == frame.staging.len() {
-            at = text.chars().count();
+            at = seen;
         }
         frame.preedit = vec![PreeditSegment {
-            text,
+            text: staged,
             kind: PreeditKind::Typed,
         }];
         frame.cursor = at;
