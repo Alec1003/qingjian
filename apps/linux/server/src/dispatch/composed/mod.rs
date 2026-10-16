@@ -121,8 +121,24 @@ impl Router {
         Some(self.engine.commit(&candidate))
     }
 
+    /// 拼音右侧的整句：历史补全优先，否则云端整句。`bool` 是要不要带云朵。
+    pub(super) fn completion(&self) -> Option<(String, bool)> {
+        if let Some(Composed::Candidates { layout, .. }) = &self.composed {
+            let index = self.highlight.min(layout.len().saturating_sub(1));
+            if let Some(text) = layout.candidate(index).map(|candidate| candidate.text.as_str())
+                && let Some(phrase) = self.engine.history_completion_for(text)
+            {
+                return Some((phrase, false));
+            }
+        }
+        self.sentence.clone().map(|text| (text, true))
+    }
+
     /// 按当前状态生成一帧：翻译评审优先；没在组句给空帧；否则给高亮所在的那一页。
     pub(super) fn current_frame(&self) -> Frame {
+        let (sentence, sentence_cloud) = self
+            .completion()
+            .map_or((None, false), |(text, cloud)| (Some(text), cloud));
         match &self.composed {
             None => Frame::default(),
             Some(Composed::Raw { text, cursor }) => Frame {
@@ -139,7 +155,8 @@ impl Router {
                 layout: self.config.layout,
                 appearance: self.config.appearance,
                 aux_code_show: false,
-                sentence: None,
+                sentence: sentence.clone(),
+                sentence_cloud,
                 notice: self.notice.clone(),
                 symbol_panel: false,
                 staging: Vec::new(),
@@ -182,7 +199,8 @@ impl Router {
                     layout: self.config.layout,
                     appearance: self.config.appearance,
                     aux_code_show: false,
-                    sentence: self.sentence.clone(),
+                    sentence,
+                    sentence_cloud,
                     notice: self.notice.clone(),
                     symbol_panel: false,
                     staging: Vec::new(),

@@ -53,6 +53,7 @@ pub fn nihao() -> Frame {
         highlighted: Some(0),
         footer: Some("1/6".to_owned()),
         sentence: None,
+        sentence_cloud: false,
         status: None,
         mode: Mode::default(),
         columns: 0,
@@ -64,6 +65,7 @@ pub fn nihao() -> Frame {
 pub fn nihao_with_sentence() -> Frame {
     let mut frame = nihao();
     frame.sentence = Some("你好，很高兴认识你！".to_owned());
+    frame.sentence_cloud = true;
     frame
 }
 

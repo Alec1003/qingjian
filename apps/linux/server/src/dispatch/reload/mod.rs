@@ -89,6 +89,8 @@ impl Router {
         self.engine
             .set_shift_letter_compose(config.general.shift_letter.compose());
         self.engine.set_learning(config.general.learning);
+        self.engine
+            .set_history_completion(config.general.history_completion);
         self.engine.set_chinese_first(config.general.chinese_first);
         self.engine
             .set_emoji_limit(usize::from(config.general.emoji.get()));

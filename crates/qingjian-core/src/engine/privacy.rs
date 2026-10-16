@@ -16,7 +16,7 @@ impl Engine {
         self.learner.set_private(private);
         self.logger.set_muted(private);
         if private {
-            // 在飞的云结果不能再显示，前文也不能留
+            // 在飞的云结果不能再显示，前文也不能留。私密输入本身不记进历史补全
             self.cancel_prediction();
             self.rescoring_before = None;
         }

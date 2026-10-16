@@ -30,8 +30,11 @@ pub struct Frame {
     /// 右下角页码。
     pub footer: Option<String>,
 
-    /// 拼音行右侧的整句补全（云联想），组句时才有。
+    /// 拼音行右侧的整句补全，组句时才有。云端的带云朵，历史补全不带。
     pub sentence: Option<String>,
+
+    /// [`sentence`](Self::sentence) 来自云端时为真。历史补全为假。
+    pub sentence_cloud: bool,
 
     /// 拼音行右侧的一句临时状态（删了什么词），有它时不画整句补全。
     pub status: Option<String>,
@@ -52,9 +55,10 @@ impl Frame {
 
     /// 拼音行右侧画什么：状态优先，其次整句补全；`bool` 是要不要带云朵。
     pub fn trailing(&self) -> Option<(&str, bool)> {
-        self.status
-            .as_deref()
-            .map(|s| (s, false))
-            .or_else(|| self.sentence.as_deref().map(|s| (s, true)))
+        self.status.as_deref().map(|s| (s, false)).or_else(|| {
+            self.sentence
+                .as_deref()
+                .map(|s| (s, self.sentence_cloud))
+        })
     }
 }

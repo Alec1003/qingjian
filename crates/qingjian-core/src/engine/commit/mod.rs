@@ -276,6 +276,7 @@ impl Engine {
         };
         self.punctuation.note_committed(&candidate.text);
         self.history.record(&candidate.text);
+        self.note_phrase(&candidate.text);
         let learned = matches!(
             candidate.kind,
             CandidateKind::Chinese

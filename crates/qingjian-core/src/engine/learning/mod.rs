@@ -85,7 +85,7 @@ impl Engine {
         let mut usage = Usage::of_text(text);
         usage.words = match source {
             InputSource::Word | InputSource::Cloud => 1,
-            InputSource::Sentence | InputSource::CloudSentence => {
+            InputSource::Sentence | InputSource::CloudSentence | InputSource::History => {
                 sentence::segment_text(text, &*self.language_model).map_or(usage.hanzi, |clauses| {
                     clauses.iter().map(|words| words.len() as u64).sum()
                 })
@@ -216,6 +216,7 @@ impl Engine {
         self.meter.flush();
         self.vocabulary.flush();
         self.translator.flush();
+        self.save_phrases();
     }
 
     /// 词库 / 用户词 / 学习数据变了，整句格子候选全部作废。

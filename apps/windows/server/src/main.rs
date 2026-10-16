@@ -221,6 +221,7 @@ fn main() {
     // 拼音侧与形码侧在 `configure_code_table` 里一起装配（双拼 / 注音 / 混输都在那）
     engine.set_traditional(config.general.traditional());
     engine.set_learning(config.general.learning);
+    engine.set_history_completion(config.general.history_completion);
     engine.set_mode_keys(config.shortcut.mode);
     engine.set_aux_code_key(config.general.aux_code_key(), config.general.page_keys());
     engine.set_aux_keep_empty(config.general.aux_code_keep_empty);

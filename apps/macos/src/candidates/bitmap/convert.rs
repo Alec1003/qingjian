@@ -13,6 +13,7 @@ pub(super) fn frame(frame: &Frame) -> qingjian_render::Frame {
         column_ems: frame.column_ems.clone(),
         footer: frame.footer.clone(),
         sentence: frame.sentence.clone(),
+        sentence_cloud: frame.sentence_cloud,
         status: frame.status.clone(),
         mode: frame.mode.clone(),
     }

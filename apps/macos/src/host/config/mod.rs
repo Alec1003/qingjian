@@ -38,6 +38,8 @@ impl Host {
         self.engine
             .set_shuangpin_raw_preedit(config.general.shuangpin_raw_preedit);
         self.engine.set_learning(config.general.learning);
+        self.engine
+            .set_history_completion(config.general.history_completion);
         logging::set_level(config.general.log_level);
         self.translation_keys = config.shortcut.translation_keys();
         self.delete_keys = config.shortcut.delete_keys();

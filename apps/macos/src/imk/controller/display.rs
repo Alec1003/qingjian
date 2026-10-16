@@ -126,6 +126,20 @@ impl QingjianInputController {
 
     /// 接受组句中的整句补全：作用域内的拼音作废，句子上屏。没有补全返回 false。
     pub(super) fn accept_sentence(&self, client: TextClient<'_>) -> bool {
+        let history = host::with(|h| {
+            h.session
+                .layout
+                .candidate(h.session.highlighted)
+                .and_then(|candidate| h.engine.history_completion_for(&candidate.text))
+        })
+        .flatten();
+        if let Some(text) = history {
+            host::with(|h| h.engine.accept_history(&text));
+            tracing::debug!(%text, "接受历史补全");
+            client.insert_text(&text);
+            self.refresh(client);
+            return true;
+        }
         let Some(text) = host::with(|h| h.sentence.take()).flatten() else {
             return false;
         };

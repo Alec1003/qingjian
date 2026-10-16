@@ -35,6 +35,9 @@ pub enum InputSource {
 
     /// Tab 接受的云端整句补全。
     CloudSentence,
+
+    /// Tab 接受的历史补全（以前上过屏的句子）。
+    History,
 }
 
 impl From<CandidateKind> for InputSource {

@@ -30,12 +30,14 @@ impl Router {
         self.sentence = None;
         if self.engine.composition().is_empty() {
             // 暂存区还在时只撤组句联想，译文继续等；都空了再整段取消。
+            // 暂存文字对得上以前的句子时，那些句子按出现次数排在暂存区下面。
             if self.engine.has_staging() {
                 self.engine.cancel_composition_prediction();
             } else {
                 self.engine.cancel_prediction();
             }
-            self.composed = None;
+            self.composed = self.history_choices();
+            self.highlight = 0;
             self.stop_rescoring();
             self.sync_staging_translation();
             return;
@@ -415,7 +417,58 @@ impl Router {
             });
     }
 
+    /// 拼音已经空、暂存区还有词时，把以这段文字开头的历史句子排成候选。次数高的在前。
+    fn history_choices(&self) -> Option<Composed> {
+        if !self.config.staging || !self.engine.has_staging() {
+            return None;
+        }
+        let prefix = self.engine.staging_words().join("");
+        let matches = self.engine.history_matches_for(&prefix);
+        if matches.is_empty() {
+            return None;
+        }
+        let items = matches
+            .into_iter()
+            .map(|text| Candidate {
+                text,
+                kind: CandidateKind::Generated,
+                syllables: Vec::new(),
+                reading: None,
+                translation: None,
+                aux_code: None,
+            })
+            .collect();
+        Some(Composed::Candidates {
+            preedit: Vec::new(),
+            cursor: 0,
+            typed_keys: None,
+            layout: CandidateLayout::new(items, self.config.page_size, 0),
+            sentence_translation: None,
+        })
+    }
+
+    /// 拼音右侧的整句：没开暂存区时，历史补全（不带云朵）优先于云端整句。
+    /// 开了暂存区之后，历史句子改排在暂存区下面，这里只留云端整句。
+    pub(super) fn completion(&self) -> Option<(String, bool)> {
+        if !self.config.staging
+            && let Some(Composed::Candidates { layout, .. }) = &self.composed
+        {
+            let index = self.highlight.min(layout.len().saturating_sub(1));
+            if let Some(text) = layout
+                .candidate(index)
+                .map(|candidate| candidate.text.as_str())
+                && let Some(phrase) = self.engine.history_completion_for(text)
+            {
+                return Some((phrase, false));
+            }
+        }
+        self.sentence.clone().map(|text| (text, true))
+    }
+
     fn composed_frame(&self) -> Frame {
+        let (sentence, sentence_cloud) = self
+            .completion()
+            .map_or((None, false), |(text, cloud)| (Some(text), cloud));
         match &self.composed {
             None => Frame::default(),
             Some(Composed::Raw { text, cursor }) => Frame {
@@ -432,7 +485,8 @@ impl Router {
                 layout: self.config.layout,
                 appearance: self.config.appearance,
                 aux_code_show: self.config.aux_code_show,
-                sentence: None,
+                sentence: sentence.clone(),
+                sentence_cloud,
                 notice: self.notice.clone(),
                 symbol_panel: false,
                 staging: Vec::new(),
@@ -467,7 +521,8 @@ impl Router {
                     layout: self.config.layout,
                     appearance: self.config.appearance,
                     aux_code_show: self.config.aux_code_show,
-                    sentence: self.sentence.clone(),
+                    sentence,
+                    sentence_cloud,
                     notice: self.notice.clone(),
                     symbol_panel: false,
                     staging: Vec::new(),

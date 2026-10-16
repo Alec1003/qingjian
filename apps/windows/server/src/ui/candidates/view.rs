@@ -175,15 +175,18 @@ fn draw_top_line(hdc: HDC, data: &RenderData, y: i32) -> i32 {
     }
     if let Some(sentence) = &data.sentence {
         let sentence_x = x + theme.column_gap;
-        let cloud = cloud_glyph_width(hdc, theme);
-        draw_text(
-            hdc,
-            theme.annotation_font,
-            theme.cloud_color,
-            sentence_x,
-            top + small,
-            CLOUD_GLYPH,
-        );
+        let cloud = if data.sentence_cloud {
+            draw_text(
+                hdc,
+                theme.annotation_font,
+                theme.cloud_color,
+                sentence_x,
+                top + small,
+                CLOUD_GLYPH,
+            )
+        } else {
+            0
+        };
         draw_text(
             hdc,
             theme.annotation_font,
@@ -370,9 +373,12 @@ fn top_line_size(hdc: HDC, data: &RenderData) -> (i32, i32) {
         prefix_width(hdc, theme, &data.preedit, usize::MAX) + scale_line(theme)
     };
     if let Some(sentence) = &data.sentence {
-        width += theme.column_gap
-            + cloud_glyph_width(hdc, theme)
-            + measure(hdc, theme.annotation_font, sentence).cx;
+        let cloud = if data.sentence_cloud {
+            cloud_glyph_width(hdc, theme)
+        } else {
+            0
+        };
+        width += theme.column_gap + cloud + measure(hdc, theme.annotation_font, sentence).cx;
     }
     (width, height + theme.row_padding * 2)
 }

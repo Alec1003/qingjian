@@ -66,6 +66,7 @@
 | 标题 | 控件 | 配置 | ⓘ |
 |---|---|---|---|
 | 每页候选数 | 步进 1–9 | `general.page_size` | |
+| 历史补全 | 开关，缺省开 | `general.history_completion` | 以前输入过的句子。开了数字键进暂存区时，按出现次数排在暂存区下面，用 Ctrl+数字键选。只保存在这台电脑上 |
 | 译文 | 下拉：英语 / 日语 / 西班牙语 / 越南语 / 不显示 | `general.learning_language` | 不显示时生词标记也关掉 |
 | 繁体 | 开关 | `general.traditional` | 只换字形，不换用语 |
 | emoji | 开关 | `general.emoji` | |

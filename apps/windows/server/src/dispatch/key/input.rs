@@ -17,6 +17,13 @@ impl Router {
         if let Some(effect) = self.commit_staging_translation_key(event) {
             return effect;
         }
+        // 暂存区下面的历史句用 Ctrl+数字选取。普通数字要能写进「今天是1号」这类句子，
+        // 不能再占着 1–9。译词快捷键仍是 Ctrl+数字，但只在拼音候选上生效。
+        if self.history_rows_showing() && event.modifiers.chord() == KeyModifiers::ctrl() {
+            if let Some(digit) = codes::digit_key(event.virtual_key) {
+                return self.adopt_history_digit(digit);
+            }
+        }
         if self.composing()
             && !self.engine.expression_mode()
             && let Some(digit) = codes::digit_key(event.virtual_key)
@@ -180,9 +187,17 @@ impl Router {
             codes::TAB if self.engine.english_mode() => {
                 Effect::Changed(Some(self.commit_highlighted()))
             }
-            // 中文模式 Tab：有整句补全就接受，否则下一页。
-            codes::TAB => match self.sentence.take() {
-                Some(sentence) => Effect::Changed(Some(self.engine.accept_prediction(&sentence))),
+            // 中文模式 Tab：历史补全优先。开了暂存区就先收进去，回车再写入；否则直接上屏。
+            // 没有历史补全时，云端整句直接上屏；都没有就下一页。
+            codes::TAB => match self.completion() {
+                Some((text, false)) if self.config.staging && self.engine.stage_history(&text) => {
+                    Effect::Changed(None)
+                }
+                Some((text, true)) => {
+                    self.sentence = None;
+                    Effect::Changed(Some(self.engine.accept_prediction(&text)))
+                }
+                Some((text, false)) => Effect::Changed(Some(self.engine.accept_history(&text))),
                 None => {
                     self.page(1);
                     Effect::Navigated
@@ -402,6 +417,14 @@ impl Router {
         {
             return Effect::Changed(None);
         }
+        // 拼音已经空、暂存区还有词：数字是句子里的字（「1号」），不是选历史句。
+        if self.engine.composition().is_empty()
+            && self.config.staging
+            && c.is_ascii_digit()
+            && self.engine.stage_literal(&c.to_string())
+        {
+            return Effect::Changed(None);
+        }
         if let Some(digit) = codes::digit(event)
             && (!self.engine.is_zhuyin_mode() || self.navigated)
         {
@@ -424,6 +447,9 @@ impl Router {
             if self.engine.zhuyin_needs_tone() {
                 self.engine.push(c);
                 return Effect::Changed(None);
+            }
+            if self.commit_highlighted_history() {
+                return Effect::Changed(Some(self.confirm_staging_and_raw()));
             }
             return Effect::Changed(Some(self.commit_highlighted()));
         }
@@ -454,8 +480,39 @@ impl Router {
         (digit <= page_size && index < self.candidate_count()).then_some(index)
     }
 
+    /// 拼音已经空、暂存区下面排着历史句。
+    fn history_rows_showing(&self) -> bool {
+        self.config.staging
+            && self.engine.composition().is_empty()
+            && self.engine.has_staging()
+            && self.candidate_count() > 0
+    }
+
+    /// Ctrl+数字：把暂存区下面的那一句换进暂存区，不写入应用。没有这一格就不动。
+    fn adopt_history_digit(&mut self, digit: usize) -> Effect {
+        let Some(index) = self.slot_index(digit) else {
+            return Effect::Navigated;
+        };
+        let Some(candidate) = self.layout_candidate(index) else {
+            return Effect::Navigated;
+        };
+        if self.engine.adopt_history_match(&candidate.text) {
+            Effect::Changed(None)
+        } else {
+            Effect::Navigated
+        }
+    }
+
     /// 数字键或注音的回车选中一格：开了暂存区就收进去，否则直接上屏。
+    /// 点历史句仍换成那一整句。键盘上的普通数字不走这里，见 [`Self::adopt_history_digit`]。
     pub(in crate::dispatch) fn select_slot(&mut self, index: usize) -> Option<String> {
+        if self.config.staging
+            && self.engine.composition().is_empty()
+            && let Some(candidate) = self.layout_candidate(index)
+            && self.engine.adopt_history_match(&candidate.text)
+        {
+            return None;
+        }
         if self.config.staging
             && let Some(candidate) = self.layout_candidate(index)
             && self.engine.stage(&candidate)
@@ -465,6 +522,17 @@ impl Router {
         self.commit_index(index)
     }
 
+    /// 高亮的是暂存区下面的一条历史句子时，先换成这一整句再上屏，避免和暂存的前缀叠成两遍。
+    fn commit_highlighted_history(&mut self) -> bool {
+        if !self.engine.composition().is_empty() || !self.engine.has_staging() {
+            return false;
+        }
+        let Some(candidate) = self.layout_candidate(self.highlight) else {
+            return false;
+        };
+        self.engine.adopt_history_match(&candidate.text)
+    }
+
     /// 注音模式下回车选高亮，开了暂存区时收进暂存区。
     fn stage_highlight(&mut self) {
         let _ = self.select_slot(self.highlight);
@@ -472,7 +540,9 @@ impl Router {
 
     /// 暂存区里的词先写出去，剩下的拼音仍按回车原样上屏。
     /// 先收走拼音，确认时缓冲区已经空了，最后一格按句尾记。
+    /// 写进应用的是一整段，历史补全按这一整段记，不按里面的每个词拆开。
     fn confirm_staging_and_raw(&mut self) -> String {
+        self.engine.hold_phrases();
         let raw = if self.engine.composition().is_empty() {
             String::new()
         } else {
@@ -483,11 +553,15 @@ impl Router {
         } else {
             String::new()
         };
-        format!("{staged}{raw}")
+        let text = format!("{staged}{raw}");
+        self.engine.release_phrases(&text);
+        text
     }
 
     /// 上屏高亮候选；没有候选时缓冲原样上屏。暂存区里已有的词排在前面一起写出去。
+    /// 写进应用的是一整段，历史补全按这一整段记，不按里面的每个词拆开。
     fn commit_highlighted(&mut self) -> String {
+        self.engine.hold_phrases();
         let staged = if self.config.staging {
             self.engine.confirm_staging().unwrap_or_default()
         } else {
@@ -497,7 +571,9 @@ impl Router {
             Some(text) => text,
             None => self.engine.take_raw(),
         };
-        format!("{staged}{word}")
+        let text = format!("{staged}{word}");
+        self.engine.release_phrases(&text);
+        text
     }
 
     pub(in crate::dispatch) fn composing(&self) -> bool {

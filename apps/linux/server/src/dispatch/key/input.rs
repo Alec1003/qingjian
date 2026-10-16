@@ -130,9 +130,13 @@ impl Router {
             codes::TAB if self.engine.english_mode() => {
                 Effect::Changed(Some(self.commit_highlighted()))
             }
-            // 中文模式 Tab：有整句补全就接受，否则下一页。
-            codes::TAB => match self.sentence.take() {
-                Some(sentence) => Effect::Changed(Some(self.engine.accept_prediction(&sentence))),
+            // 中文模式 Tab：历史补全优先，其次云端整句，都没有就下一页。
+            codes::TAB => match self.completion() {
+                Some((text, true)) => {
+                    self.sentence = None;
+                    Effect::Changed(Some(self.engine.accept_prediction(&text)))
+                }
+                Some((text, false)) => Effect::Changed(Some(self.engine.accept_history(&text))),
                 None => {
                     self.page(1);
                     Effect::Navigated

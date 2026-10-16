@@ -139,6 +139,13 @@ impl Host {
         }
         let pages = self.session.pages();
         let footer = (pages > 1).then(|| format!("{}/{pages}", page + 1));
+        let (sentence, sentence_cloud) = self
+            .session
+            .layout
+            .candidate(self.session.highlighted)
+            .and_then(|candidate| self.engine.history_completion_for(&candidate.text))
+            .map(|text| (Some(text), false))
+            .unwrap_or_else(|| (self.sentence.clone(), true));
         let frame = Frame {
             preedit,
             rows,
@@ -150,7 +157,8 @@ impl Host {
                 Vec::new()
             },
             footer,
-            sentence: self.sentence.clone(),
+            sentence,
+            sentence_cloud,
             status: self.status.clone(),
             mode: self.input_mode(),
             panel: None,

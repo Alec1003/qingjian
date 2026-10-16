@@ -50,8 +50,12 @@ pub struct Frame {
     #[serde(default)]
     pub aux_code_show: bool,
 
-    /// 整句补全（云联想给的整段拼音的整句结果）：画在 preedit 行右侧，按 Tab 上屏。无则 `None`。
+    /// 整句补全（云联想或历史补全）：画在 preedit 行右侧，按 Tab 上屏。无则 `None`。
     pub sentence: Option<String>,
+
+    /// 整句补全来自云端时带云朵。历史补全为 false。旧帧没有这一项时不带云朵。
+    #[serde(default)]
+    pub sentence_cloud: bool,
 
     /// 屏幕提示（删候选后的「已删除…」一句）：画在 preedit 行下方，显示到下一次按键。无则 `None`。
     /// 不参与 [`is_empty`](Self::is_empty)：单有提示不算在组句，否则空组句也会撑开候选窗口。

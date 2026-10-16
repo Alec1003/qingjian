@@ -41,6 +41,7 @@ pub fn assemble(spec: &AssemblySpec) -> Result<Engine, ServerError> {
         engine = engine
             .with_usage_meter(Box::new(UsageStats::open(dir)))
             .with_vocabulary_tracker(Box::new(load_vocabulary(dir, spec.levels_dir.as_deref())));
+        engine.set_phrase_path(dir.join("phrase-history.txt"));
         if spec.input_log {
             let path = spec
                 .log_dir

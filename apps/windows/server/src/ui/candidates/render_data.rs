@@ -32,6 +32,9 @@ pub(crate) struct RenderData {
     /// 整句补全，画在拼音行右侧。
     pub(super) sentence: Option<String>,
 
+    /// 整句补全来自云端时带云朵。
+    pub(super) sentence_cloud: bool,
+
     /// 屏幕提示（删候选后的「已删除…」），画在拼音行下方。
     pub(super) notice: Option<String>,
 
@@ -58,6 +61,7 @@ impl RenderData {
             highlight: usize::MAX,
             footer: None,
             sentence: None,
+            sentence_cloud: false,
             notice: None,
             layout: LayoutMode::default(),
             appearance: Appearance::default(),
@@ -91,6 +95,7 @@ impl RenderData {
         self.footer =
             (frame.page_count > 1).then(|| format!("{}/{}", frame.page + 1, frame.page_count));
         self.sentence = frame.sentence.clone();
+        self.sentence_cloud = frame.sentence_cloud;
         self.notice = frame.notice.clone();
     }
 
@@ -116,6 +121,7 @@ impl RenderData {
             column_ems: Vec::new(),
             footer: self.footer.clone(),
             sentence: self.sentence.clone(),
+            sentence_cloud: self.sentence_cloud,
             status: self.notice.clone(),
             mode: self.mode.clone(),
         }

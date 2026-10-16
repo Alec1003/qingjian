@@ -251,6 +251,31 @@ fn punct_commits_off_keeps_punctuation_in_raw_segment() {
     );
 }
 
+/// 暂存区下面有历史句时，普通数字写进暂存区，Ctrl+数字才选那一句。
+#[test]
+fn digit_after_staging_is_literal_and_ctrl_digit_adopts_history() {
+    let (mut typed, mut chosen) = (router(9), router(9));
+    let normal = KeyModifiers::default();
+    typed.config.staging = true;
+    typed.engine.accept_history("第1项甲");
+    compose(&mut typed, "qq", normal);
+    let staged = key(&mut typed, 0x31, Some('1'), normal);
+    assert_eq!(staged.1, None);
+    assert_eq!(staged.2.staging, vec!["第1项".to_owned()]);
+
+    let digit = key(&mut typed, 0x31, Some('1'), normal);
+    assert_eq!(digit.1, None);
+    assert_eq!(digit.2.staging, vec!["第1项".to_owned(), "1".to_owned()]);
+
+    chosen.config.staging = true;
+    chosen.engine.accept_history("第1项甲");
+    compose(&mut chosen, "qq", normal);
+    key(&mut chosen, 0x31, Some('1'), normal);
+    let adopted = key(&mut chosen, 0x31, Some('1'), KeyModifiers::ctrl());
+    assert_eq!(adopted.1, None);
+    assert_eq!(adopted.2.staging, vec!["第1项甲".to_owned()]);
+}
+
 /// 英文候选里 `-` `=` 作翻页键：`-` 翻得回上一页；第一页没得翻时 `-` 仍是单词里的连字符。
 #[test]
 fn english_minus_pages_back_and_stays_a_hyphen_on_the_first_page() {

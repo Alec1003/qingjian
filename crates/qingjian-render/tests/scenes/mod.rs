@@ -50,6 +50,7 @@ pub fn cloud() -> Frame {
         .rows
         .push(annotated(3, "你好吗", &[("hello?", Tone::Gloss)], true));
     frame.sentence = Some("你好，世界".to_owned());
+    frame.sentence_cloud = true;
     frame.footer = Some("1/3".to_owned());
     frame
 }
@@ -101,6 +102,7 @@ pub fn corrected_japanese() -> Frame {
         highlighted: Some(1),
         footer: None,
         sentence: None,
+        sentence_cloud: false,
         status: Some("已删除「开放」".to_owned()),
         mode: Mode::default(),
         columns: 0,
@@ -116,6 +118,7 @@ pub fn probe() -> Frame {
         highlighted: None,
         footer: None,
         sentence: None,
+        sentence_cloud: false,
         status: None,
         mode: Mode::default(),
         columns: 0,
@@ -161,6 +164,7 @@ pub fn aux_code() -> Frame {
         highlighted: Some(0),
         footer: Some("1/1".into()),
         sentence: None,
+        sentence_cloud: false,
         status: None,
         mode: Mode::default(),
         columns: 0,
@@ -188,6 +192,7 @@ pub fn short() -> Frame {
         highlighted: None,
         footer: None,
         sentence: None,
+        sentence_cloud: false,
         status: None,
         mode: Mode::default(),
         columns: 0,

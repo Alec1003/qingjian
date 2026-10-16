@@ -65,6 +65,7 @@ impl Report {
             InputSource::Custom
             | InputSource::Cloud
             | InputSource::CloudSentence
+            | InputSource::History
             | InputSource::Raw
             | InputSource::Translation => None,
         }

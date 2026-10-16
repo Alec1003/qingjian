@@ -111,6 +111,7 @@ impl Router {
             appearance: self.config.appearance,
             aux_code_show: self.config.aux_code_show,
             sentence: None,
+            sentence_cloud: false,
             notice: None,
             symbol_panel: false,
             staging: Vec::new(),

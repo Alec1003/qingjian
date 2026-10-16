@@ -15,6 +15,7 @@ pub mod fuzzy;
 pub mod history;
 pub mod panel;
 pub mod parser;
+mod phrase;
 pub mod punctuation;
 pub mod ranking;
 pub mod sentence;

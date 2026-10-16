@@ -24,6 +24,7 @@ impl Engine {
         };
         if let Some(text) = converted {
             self.history.record(text);
+            self.note_phrase(text);
             self.remember_commit(LastCommit::plain(text));
             // 全角标点也是文本流的一部分，与直通字符攒在一起
             self.passthrough_pending.push_str(text);
@@ -39,6 +40,7 @@ impl Engine {
         self.punctuation.note_passthrough(c);
         let text = c.encode_utf8(&mut [0; 4]).to_owned();
         self.history.record(&text);
+        self.note_phrase(&text);
         self.chain.reset();
         self.remember_commit(LastCommit::plain(&text));
         self.passthrough_pending.push(c);
@@ -383,6 +385,7 @@ impl Engine {
         self.remember_commit(LastCommit::plain(&raw));
         self.punctuation.note_committed(&raw);
         self.history.record(&raw);
+        self.note_phrase(&raw);
         self.chain.reset();
         if lead { format!(" {raw}") } else { raw }
     }

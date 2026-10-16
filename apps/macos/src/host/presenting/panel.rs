@@ -60,6 +60,7 @@ impl Host {
             column_ems: Vec::new(),
             footer: (pages > 1).then(|| format!("{}/{pages}", self.session.page + 1)),
             sentence: None,
+            sentence_cloud: false,
             status: None,
             mode: self.input_mode(),
             panel: Some(tabs),

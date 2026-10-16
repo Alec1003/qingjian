@@ -377,10 +377,19 @@ impl Engine {
         });
     }
 
-    /// 用户接受一条整句补全：作用域内的拼音作废、句子上屏。句子没有拼音，记不了词频与用户词，
-    /// 但按语言模型把它切成词（[`sentence::segment_text`]）逐条记进个人 n-gram，与选整句候选一样；
-    /// 标点处断句，句尾是标点时之后的词按句首记。整句退格删光再重打时这些转移一并退回。
+    /// 用户接受一条云端整句补全：作用域内的拼音作废、句子上屏。
     pub fn accept_prediction(&mut self, text: &str) -> String {
+        self.accept_sentence(text, InputSource::CloudSentence)
+    }
+
+    /// 用户接受一条历史补全：作用域内的拼音作废、句子上屏，并按这一句单独记一次。
+    pub fn accept_history(&mut self, text: &str) -> String {
+        self.accept_sentence(text, InputSource::History)
+    }
+
+    /// 整句没有拼音，记不了词频与用户词，但按语言模型把它切成词（[`sentence::segment_text`]）逐条记进个人 n-gram，
+    /// 与选整句候选一样；标点处断句，句尾是标点时之后的词按句首记。整句退格删光再重打时这些转移一并退回。
+    fn accept_sentence(&mut self, text: &str, source: InputSource) -> String {
         // 壳送回来的是繁体那份：先换回简体，下面的学习、日志、n-gram 一律看简体
         let traditional_text = text.to_owned();
         let restored = self.traditional.restore(text);
@@ -389,11 +398,12 @@ impl Engine {
         self.apply_retraction(&input, text);
         self.recording.clear();
         let keys = self.composition.scope().to_owned();
-        let log_id = self.log_commit(&keys, text, InputSource::CloudSentence);
-        self.meter_commit(text, InputSource::CloudSentence, false);
+        let log_id = self.log_commit(&keys, text, source);
+        self.meter_commit(text, source, false);
         self.composition.drain_scope();
         self.punctuation.note_committed(text);
         self.history.record(text);
+        self.note_phrase(text);
         match sentence::segment_text(text, &*self.language_model) {
             Some(clauses) => {
                 let buffer_left = !self.composition.is_empty();

@@ -31,6 +31,18 @@ pub struct KeyModifiers {
 }
 
 impl KeyModifiers {
+    /// 只按着 Ctrl。
+    pub const fn ctrl() -> Self {
+        Self {
+            ctrl: true,
+            shift: false,
+            alt: false,
+            win: false,
+            caps: false,
+            english_mode: false,
+        }
+    }
+
     /// 按着的物理修饰键组合（去掉 Caps Lock 与中英模式这两个输入法状态位），拿来与配置的快捷键比。
     pub fn chord(self) -> Self {
         Self {

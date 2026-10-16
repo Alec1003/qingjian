@@ -74,6 +74,15 @@ pub fn candidates(ui: &mut Ui<Message>, page: &Page) -> Result<Vec<NodeId>, Rend
             false,
         )?);
     }
+    rows.push(toggle_info(
+        ui,
+        page,
+        "历史补全",
+        Some("以前输入过的句子。开了数字键进暂存区时，按出现次数排在暂存区下面，用 Ctrl+数字键选。只保存在这台电脑上"),
+        ("general", "history_completion"),
+        general.history_completion,
+        false,
+    )?);
     out.push(section_title(ui, theme, "显示")?);
     out.push(group(ui, theme, &rows)?);
 

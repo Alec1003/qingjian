@@ -17,6 +17,7 @@ mod learning;
 mod marked;
 mod mode_keys;
 mod panel;
+mod phrase;
 mod prediction;
 mod privacy;
 mod query;
@@ -73,6 +74,7 @@ use crate::fuzzy::{Expanded, FuzzyRules};
 use crate::history::InputHistory;
 use crate::panel::SymbolPanel;
 use crate::parser::{self, ParseError, Segmentation};
+use crate::phrase::PhraseHistory;
 use crate::punctuation::Punctuation;
 use crate::ranking::{self, Scored};
 use crate::sentence::{
@@ -238,6 +240,18 @@ pub struct Engine {
 
     /// 本次会话经我们上屏的文本，应用不给上下文时用它联想。
     history: InputHistory,
+
+    /// 以前上过屏的句子，历史补全用。不跟会话走，换应用也不清。
+    phrases: PhraseHistory,
+
+    /// [`phrases`](Self::phrases) 的落盘路径。没设就只留在内存里。
+    phrase_path: Option<std::path::PathBuf>,
+
+    /// 历史补全开关（`[general] history_completion`）。关着不记、也不提示。
+    history_completion: bool,
+
+    /// 同一次按键要把暂存区和紧接着的词写成一整句。开着时按词记的句子先拦住，最后记写进应用的那整段。
+    phrase_hold: bool,
 
     /// 最近一次联想请求的序号，0 表示还没发过。
     prediction_sequence: u64,
@@ -462,6 +476,10 @@ impl Engine {
             last_query: std::cell::RefCell::new(None),
             recording: Vec::new(),
             history: InputHistory::default(),
+            phrases: PhraseHistory::default(),
+            phrase_path: None,
+            history_completion: true,
+            phrase_hold: false,
             prediction_sequence: 0,
             pending_predictions: HashMap::new(),
             chain: CommitChain::default(),

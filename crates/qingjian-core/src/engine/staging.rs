@@ -25,6 +25,9 @@ struct Staged {
 
     /// 退格改过字。确认时仍写入剩下的文本，不再按原来的候选记学习。
     edited: bool,
+
+    /// 历史补全收进来的整句。确认时按整句记个人 n-gram，不按词频记。
+    history: bool,
 }
 
 /// 暂存的词和插入位置。光标在第 `cursor` 格之前，下一词插在这里。
@@ -68,6 +71,7 @@ impl Engine {
             typos,
             sentence_words,
             edited: false,
+            history: false,
         };
         self.forget_span_cache();
         self.composition.drain_prefix(consumed);
@@ -76,6 +80,116 @@ impl Engine {
         self.staging.items.insert(at, staged);
         self.staging.cursor = at + 1;
         true
+    }
+
+    /// 把一条历史补全收进暂存区，并吃掉当前整段拼音。不写应用、不记学习。
+    /// 确认之后才按这一句单独记一次。拼音已经空着时返回 `false`。
+    pub fn stage_history(&mut self, text: &str) -> bool {
+        if text.is_empty() || self.composition.is_empty() {
+            return false;
+        }
+        let (consumed, input) = self.whole_scope();
+        if consumed == 0 {
+            return false;
+        }
+        let shown = Candidate {
+            text: text.to_owned(),
+            kind: CandidateKind::Generated,
+            syllables: Vec::new(),
+            reading: None,
+            translation: None,
+            aux_code: None,
+        };
+        let staged = Staged {
+            text: self.staged_text(&shown),
+            candidate: self.staged_candidate(&shown),
+            input,
+            typos: Vec::new(),
+            sentence_words: None,
+            edited: false,
+            history: true,
+        };
+        self.forget_span_cache();
+        self.composition.drain_scope();
+        self.aux_code = None;
+        self.push_history(staged);
+        true
+    }
+
+    /// 在已有暂存文字后面再放一段原样文字（数字这类不是候选的字）。不写应用、不记学习。
+    /// 暂存区是空的时返回 `false`。
+    pub fn stage_literal(&mut self, text: &str) -> bool {
+        if text.is_empty() || !self.has_staging() {
+            return false;
+        }
+        let shown = Candidate {
+            text: text.to_owned(),
+            kind: CandidateKind::Generated,
+            syllables: Vec::new(),
+            reading: None,
+            translation: None,
+            aux_code: None,
+        };
+        let staged = Staged {
+            text: text.to_owned(),
+            candidate: shown,
+            input: String::new(),
+            typos: Vec::new(),
+            sentence_words: None,
+            edited: true,
+            history: false,
+        };
+        self.punctuation.note_committed(text);
+        self.push_history(staged);
+        true
+    }
+
+    /// 暂存区下面选中一条历史预测：换成这一整句，仍留在暂存区，不写入应用。
+    /// 不是当前暂存文字的更长历史句时返回 `false`。
+    pub fn adopt_history_match(&mut self, text: &str) -> bool {
+        if !self.has_staging() || text.is_empty() {
+            return false;
+        }
+        let prefix = self.staging_words().join("");
+        if !self
+            .history_matches_for(&prefix)
+            .iter()
+            .any(|item| item == text)
+        {
+            return false;
+        }
+        let input = self
+            .staging
+            .items
+            .iter()
+            .map(|item| item.input.as_str())
+            .collect::<String>();
+        let shown = Candidate {
+            text: text.to_owned(),
+            kind: CandidateKind::Generated,
+            syllables: Vec::new(),
+            reading: None,
+            translation: None,
+            aux_code: None,
+        };
+        let staged = Staged {
+            text: self.staged_text(&shown),
+            candidate: self.staged_candidate(&shown),
+            input,
+            typos: Vec::new(),
+            sentence_words: None,
+            edited: false,
+            history: true,
+        };
+        self.staging.clear();
+        self.push_history(staged);
+        true
+    }
+
+    fn push_history(&mut self, staged: Staged) {
+        let at = self.staging.cursor.min(self.staging.items.len());
+        self.staging.items.insert(at, staged);
+        self.staging.cursor = at + 1;
     }
 
     /// 把暂存区整段写入应用该用的文本，并按选词顺序记学习。空则 `None`。
@@ -138,6 +252,7 @@ impl Engine {
         self.chain.reset();
         self.punctuation.note_committed(committed);
         self.history.record(committed);
+        self.note_phrase(committed);
         let mut plain = LastCommit::plain(committed);
         plain.chars = committed.chars().count();
         plain.tail = committed.chars().last();
@@ -210,10 +325,15 @@ impl Engine {
             self.chain.reset();
             self.punctuation.note_committed(&staged.text);
             self.history.record(&staged.text);
+            self.note_phrase(&staged.text);
             let mut plain = LastCommit::plain(&staged.text);
             plain.chars = staged.text.chars().count();
             plain.tail = staged.text.chars().last();
             self.remember_commit(plain);
+            return;
+        }
+        if staged.history {
+            self.learn_history(staged, buffer_left);
             return;
         }
         let candidate = &staged.candidate;
@@ -280,6 +400,7 @@ impl Engine {
         );
         self.punctuation.note_committed(&staged.text);
         self.history.record(&staged.text);
+        self.note_phrase(&staged.text);
         let learned = matches!(
             candidate.kind,
             CandidateKind::Chinese
@@ -309,6 +430,47 @@ impl Engine {
             plain.chars = staged.text.chars().count();
             plain.tail = staged.text.chars().last();
             plain
+        };
+        self.remember_commit(commit);
+    }
+
+    /// 确认一条历史补全：拼音在收进暂存时已经吃掉，这里只记日志、个人 n-gram 和句子。
+    fn learn_history(&mut self, staged: &Staged, buffer_left: bool) {
+        let text = staged.candidate.text.as_str();
+        self.recording.clear();
+        let log_id = self.log_commit(&staged.input, text, InputSource::History);
+        self.meter_commit(text, InputSource::History, false);
+        self.punctuation.note_committed(text);
+        self.history.record(text);
+        self.note_phrase(text);
+        match crate::sentence::segment_text(text, &*self.language_model) {
+            Some(clauses) => {
+                let count = clauses.len();
+                for (index, words) in clauses.iter().enumerate() {
+                    if index > 0 {
+                        self.chain.reset();
+                    }
+                    for word in words {
+                        self.record_word(word, &[], 1, false, buffer_left || index + 1 < count);
+                    }
+                }
+                if text.chars().last().is_some_and(|c| !c.is_alphanumeric()) {
+                    self.chain.reset();
+                }
+            }
+            None => self.chain.reset(),
+        }
+        let commit = LastCommit {
+            text: text.to_owned(),
+            chars: staged.text.chars().count(),
+            tail: staged.text.chars().last(),
+            input: staged.input.clone(),
+            chosen: None,
+            transitions: std::mem::take(&mut self.recording),
+            typos: Vec::new(),
+            erased: 0,
+            log_id,
+            phrase: None,
         };
         self.remember_commit(commit);
     }

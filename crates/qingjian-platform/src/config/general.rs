@@ -118,6 +118,11 @@ pub struct GeneralConfig {
     /// 数字键把候选收进暂存区，回车才写入应用。缺省关：数字键仍直接上屏。
     pub staging: bool,
 
+    /// 历史补全：组句中高亮候选是以前上过屏的句子的前缀时，整句画在拼音右侧，Tab 采用。
+    /// 缺省开，不联网。文件里没写这一项时也当开着。
+    #[serde(default = "default_on")]
+    pub history_completion: bool,
+
     /// 辅码触发键：拼音打完之后敲它进辅码态，缺省 `;`。校验 = 单字符、ASCII 可打印、
     /// 非字母数字、非翻页键（见 [`qingjian_core::is_valid_aux_code_key`]）。
     pub aux_code_key: String,
@@ -174,6 +179,10 @@ pub struct GeneralConfig {
     pub system_text_replacements: bool,
 }
 
+fn default_on() -> bool {
+    true
+}
+
 impl Default for GeneralConfig {
     fn default() -> Self {
         Self {
@@ -205,6 +214,7 @@ impl Default for GeneralConfig {
             english_full_width_punctuation: false,
             punct_commits: false,
             staging: false,
+            history_completion: true,
             aux_code_key: qingjian_core::DEFAULT_AUX_CODE_KEY.to_string(),
             aux_code_show: false,
             aux_code_keep_empty: true,
